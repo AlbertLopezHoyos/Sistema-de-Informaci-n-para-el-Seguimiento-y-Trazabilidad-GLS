@@ -1,0 +1,157 @@
+const path = require("path");
+
+const { getDb, runTransaction, doc } = require("../../config/firebase.config");
+const { areaResponsableDefault } = require("../../config/app.config");
+const { nowIso } = require("../../utils/fechas");
+const { getYear, formatCodigoEnvio } = require("../../utils/codigoEnvio");
+const { generateQrPng } = require("../../utils/qrGenerator");
+const { buildEnvioDraft, buildDimensiones, buildCotizacionInput } = require("./envio.model");
+const { requiredNumber } = require("../../utils/validaciones");
+const { calcularCotizacion } = require("../../utils/cotizacionEnvio");
+const {
+  findEnvioByCodigo,
+  getHistorialByCodigo,
+  countersDocRef,
+  listEnviosActivos,
+  listEnviosHistorial,
+  subscribeEnviosActivos
+} = require("./envio.repository");
+
+function getQrOutputPaths(codigoEnvio) {
+  const fileName = `${codigoEnvio}.png`;
+  const absolute = path.join(__dirname, "..", "..", "renderer", "assets", "qr", fileName);
+  const rutaLocalQr = path.join("src", "renderer", "assets", "qr", fileName).replaceAll("\\", "/");
+  return { absolute, rutaLocalQr };
+}
+
+async function generarCodigoEnvioConsecutivo() {
+  const year = getYear();
+  const counterId = `ENV-${year}`;
+  const counterRef = countersDocRef(counterId);
+
+  const result = await runTransaction(getDb(), async (tx) => {
+    const snap = await tx.get(counterRef);
+    const current = snap.exists() ? Number(snap.data()?.current || 0) : 0;
+    const next = current + 1;
+    tx.set(counterRef, { current: next, year, updatedAt: nowIso() }, { merge: true });
+    return { year, next };
+  });
+
+  return formatCodigoEnvio(result.year, result.next);
+}
+
+function previewCotizacion(payload) {
+  try {
+    const peso = requiredNumber(payload?.peso, "peso");
+    const dimensiones = buildDimensiones(payload?.dimensiones || payload);
+    const cotizacion = buildCotizacionInput(payload);
+    if (!cotizacion) {
+      return { ok: true, cotizacionEstimada: null };
+    }
+    const cotizacionEstimada = calcularCotizacion({
+      pesoKg: peso,
+      dimensiones,
+      cotizacion
+    });
+    return { ok: true, cotizacionEstimada };
+  } catch (err) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+}
+
+async function crearEnvio(payload) {
+  const draft = buildEnvioDraft(payload);
+  const codigoEnvio = await generarCodigoEnvioConsecutivo();
+  const fechaRegistro = nowIso();
+
+  let cotizacionEstimada = null;
+  if (draft.cotizacion) {
+    cotizacionEstimada = calcularCotizacion({
+      pesoKg: draft.peso,
+      dimensiones: draft.dimensiones,
+      cotizacion: draft.cotizacion
+    });
+  }
+
+  const envio = {
+    codigoEnvio,
+    ...draft,
+    cotizacionEstimada,
+    estadoActual: "Registrado",
+    fechaRegistro,
+    observacion: draft.observacion || "Sin observaciones"
+  };
+
+  const db = getDb();
+
+  const created = await runTransaction(db, async (tx) => {
+    const envioRef = doc(db, "envios", codigoEnvio);
+    tx.set(envioRef, envio, { merge: false });
+
+    const historialRef = doc(db, "historial_envios", `${codigoEnvio}__${fechaRegistro}`);
+    tx.set(
+      historialRef,
+      {
+        codigoEnvio,
+        estado: "Registrado",
+        fechaActualizacion: fechaRegistro,
+        observacion: "Registro inicial del envío",
+        responsable: areaResponsableDefault
+      },
+      { merge: false }
+    );
+
+    return { envioId: envioRef.id, historialId: historialRef.id };
+  });
+
+  const { absolute, rutaLocalQr } = getQrOutputPaths(codigoEnvio);
+  await generateQrPng({ content: codigoEnvio, outputFilePath: absolute });
+
+  await runTransaction(db, async (tx) => {
+    const qrRef = doc(db, "qr_envios", codigoEnvio);
+    tx.set(
+      qrRef,
+      {
+        codigoEnvio,
+        contenidoQr: codigoEnvio,
+        rutaLocalQr,
+        fechaGeneracion: nowIso()
+      },
+      { merge: true }
+    );
+  });
+
+  return { ok: true, codigoEnvio, created, rutaLocalQr };
+}
+
+async function obtenerPorCodigo(codigoEnvio) {
+  const envio = await findEnvioByCodigo(codigoEnvio);
+  if (!envio) return { ok: false, error: "Envío no encontrado" };
+  const historial = await getHistorialByCodigo(codigoEnvio);
+  return { ok: true, envio, historial };
+}
+
+async function listarActivos(opts) {
+  const envios = await listEnviosActivos(opts);
+  return { ok: true, envios };
+}
+
+async function listarHistorial(opts) {
+  const envios = await listEnviosHistorial(opts);
+  return { ok: true, envios };
+}
+
+function suscribirseActivos({ limitCount, onData, onError }) {
+  return subscribeEnviosActivos({ limitCount, onData, onError });
+}
+
+module.exports = {
+  previewCotizacion,
+  crearEnvio,
+  obtenerPorCodigo,
+  generarCodigoEnvioConsecutivo,
+  listarActivos,
+  listarHistorial,
+  suscribirseActivos
+};
+

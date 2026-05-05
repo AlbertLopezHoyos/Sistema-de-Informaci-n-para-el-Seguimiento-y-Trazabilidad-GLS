@@ -1,0 +1,21 @@
+.kpi{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+}
+.kpi .num{font-size:24px; font-weight:950; letter-spacing:.2px}
+.kpi .label{color:var(--muted); font-size:12px; margin-top:6px}
+.kpi .ico{
+  width:40px; height:40px;
+  border-radius:12px;
+  display:grid; place-items:center;
+  background: linear-gradient(180deg, rgba(122, 40, 40, .10), rgba(245, 124, 0, .10));
+  border:1px solid var(--border-2);
+}
+
+.kpi.kpi-accent .ico{background: linear-gradient(180deg, rgba(245, 124, 0, .16), rgba(122, 40, 40, .08))}
+.kpi.kpi-ok .ico{background: linear-gradient(180deg, rgba(22,163,74,.12), rgba(122, 40, 40, .06))}
+.kpi.kpi-warn .ico{background: linear-gradient(180deg, rgba(217,119,6,.14), rgba(122, 40, 40, .06))}
+.kpi.kpi-danger .ico{background: linear-gradient(180deg, rgba(220,38,38,.12), rgba(122, 40, 40, .06))}
+

@@ -1,0 +1,301 @@
+:root{
+  /* Identidad visual (Grupo Logístico Salazar - referencia web corporativa) */
+  --brand:#7a2828; /* granate principal */
+  --brand-2:#5f1f1f;
+  --brand-3:#3a1010;
+
+  --accent:#f57c00; /* naranja corporativo (CTA / resaltado) */
+  --accent-2:#e87000;
+
+  --primary:#7a2828; /* botones primarios corporativos */
+  --primary-2:#5f1f1f;
+
+  /* Superficies */
+  --bg:#f4f6fa;
+  --surface:#ffffff;
+  --surface-2:#fbfbfb;
+  --surface-3:#f3f3f3;
+
+  /* Texto */
+  --text:#0f172a;
+  --muted:#5b667a;
+  --muted-2:#7b869b;
+
+  /* Bordes y sombras */
+  --border:rgba(15,23,42,.12);
+  --border-2:rgba(15,23,42,.08);
+  --shadow-sm:0 6px 18px rgba(2,6,23,.08);
+  --shadow:0 14px 40px rgba(2,6,23,.12);
+
+  /* Estados */
+  --success:#16a34a;
+  --danger:#dc2626;
+  --warning:#d97706;
+  --info:#b45309;
+
+  --radius:14px;
+  --radius2:12px;
+  --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Helvetica Neue", sans-serif;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family:var(--font);
+  background:
+    radial-gradient(1100px 520px at 10% 0%, rgba(122, 40, 40, .10), transparent 55%),
+    radial-gradient(900px 520px at 80% 12%, rgba(245, 124, 0, .10), transparent 55%),
+    var(--bg);
+  color:var(--text);
+}
+
+.app{
+  display:grid;
+  grid-template-columns: 296px 1fr;
+  min-height:100vh;
+}
+
+.sidebar{
+  position:sticky;
+  top:0;
+  height:100vh;
+  padding:18px 16px;
+  border-right:1px solid var(--border-2);
+  background:
+    radial-gradient(1200px 520px at -10% 0%, rgba(245, 124, 0, .16), transparent 55%),
+    linear-gradient(180deg, var(--brand), var(--brand-3));
+  color:#fff;
+  display:flex;
+  flex-direction:column;
+}
+.brand{display:flex; gap:12px; align-items:center; padding:10px 10px 16px}
+.brand-badge{
+  width:44px;height:44px;border-radius:12px;
+  display:grid;place-items:center;
+  background: linear-gradient(180deg, var(--accent), var(--accent-2));
+  box-shadow: 0 12px 30px rgba(245, 124, 0, .25);
+  font-weight:800;
+}
+.brand-title{font-weight:900; letter-spacing:.2px}
+.brand-subtitle{color:rgba(255,255,255,.70); font-size:12px; margin-top:2px}
+.side-nav{display:flex; flex-direction:column; gap:8px; padding:6px 10px; flex:1; overflow:auto}
+.side-link{
+  padding:12px 12px;
+  border-radius:12px;
+  text-decoration:none;
+  color:rgba(255,255,255,.88);
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.06);
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.side-link:hover{border-color:rgba(255,255,255,.18); background: rgba(255,255,255,.10)}
+.side-link.is-active{
+  border-color:rgba(245, 124, 0, .55);
+  background: linear-gradient(90deg, rgba(245, 124, 0, .22), rgba(255,255,255,.08));
+  color:#fff;
+}
+.side-link .ico{width:18px; height:18px; display:inline-grid; place-items:center; opacity:.95}
+.muted{color:var(--muted); font-size:12px}
+.muted-on-dark{color:rgba(255,255,255,.70); font-size:12px}
+
+.main{
+  padding:0;
+  min-width:0;
+}
+.topbar{
+  position:sticky;
+  top:0;
+  z-index:10;
+  background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.90));
+  backdrop-filter: blur(10px);
+  border-bottom:1px solid var(--border-2);
+}
+.topbar-inner{
+  padding:16px 20px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+}
+.topbar-title{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+.app-name{font-size:14px; font-weight:900; letter-spacing:.2px}
+.company{font-size:12px; color:var(--muted)}
+.area-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:7px 10px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  font-size:12px;
+  color: var(--text);
+  font-weight:800;
+}
+.content{
+  padding:18px 20px 26px;
+}
+.page-head{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:16px;
+  margin-bottom:14px;
+}
+.page-title{font-size:22px; font-weight:950; letter-spacing:.2px}
+.page-subtitle{color:var(--muted); font-size:13px; margin-top:6px}
+
+.grid{display:grid; gap:14px}
+.grid-2{grid-template-columns:1fr 1fr}
+.grid-3{grid-template-columns:1fr 1fr 1fr}
+.grid-4{grid-template-columns:1fr 1fr 1fr 1fr}
+
+.card{
+  background: linear-gradient(180deg, var(--surface), var(--surface-2));
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding:14px 14px;
+}
+.card-title{font-weight:950; margin:0 0 10px}
+.card-subtitle{margin:0 0 12px; color:var(--muted); font-size:13px}
+
+.form-row{display:grid; gap:10px}
+.field label{display:block; color:var(--muted); font-size:12px; margin-bottom:6px}
+.field input,.field select,.field textarea{
+  width:100%;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background: #fff;
+  color:var(--text);
+  outline:none;
+}
+.field textarea{min-height:92px; resize:vertical}
+.field input:focus,.field select:focus,.field textarea:focus{
+  border-color:rgba(122, 40, 40, .55);
+  box-shadow: 0 0 0 4px rgba(122, 40, 40, .10);
+}
+
+.actions{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+.btn{
+  border:1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  padding:10px 12px;
+  border-radius:12px;
+  cursor:pointer;
+  font-weight:700;
+  box-shadow: 0 8px 18px rgba(2,6,23,.06);
+}
+.btn:hover{filter:brightness(0.98)}
+.btn-primary{
+  background: linear-gradient(180deg, var(--primary), var(--primary-2));
+  border-color:rgba(122, 40, 40, .35);
+  color:#fff;
+}
+.btn-primary:hover{filter:brightness(1.05)}
+.btn-accent{
+  background: linear-gradient(180deg, var(--accent), var(--accent-2));
+  border-color:rgba(245, 124, 0, .45);
+  color:#fff;
+}
+.btn-ghost{background: transparent}
+.btn-icon{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+}
+.btn-icon .ico{width:18px;height:18px; display:inline-grid; place-items:center}
+.badge{
+  display:inline-flex; align-items:center; gap:8px;
+  padding:7px 10px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background: var(--surface-3);
+  color: var(--text);
+  font-size:12px;
+}
+.badge.ok{border-color: rgba(22,163,74,.35); background: rgba(22,163,74,.10)}
+.badge.warn{border-color: rgba(217,119,6,.35); background: rgba(217,119,6,.10)}
+.badge.danger{border-color: rgba(220,38,38,.35); background: rgba(220,38,38,.10)}
+.badge.info{border-color: rgba(245, 124, 0, .35); background: rgba(245, 124, 0, .10)}
+
+.alert{
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.alert-success{border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.10)}
+.alert-error{border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.10)}
+
+.table{
+  width:100%;
+  border-collapse: collapse;
+  overflow:hidden;
+  border-radius: 12px;
+  border:1px solid var(--border);
+}
+.table th,.table td{
+  text-align:left;
+  padding:10px 10px;
+  border-bottom:1px solid var(--border);
+  font-size:13px;
+}
+.table th{color: var(--muted); font-weight:700; background: rgba(255,255,255,.03)}
+.table tr:hover td{background: rgba(255,255,255,.02)}
+
+.modal-overlay{
+  position:fixed; inset:0;
+  background: rgba(0,0,0,.55);
+  display:grid; place-items:center;
+  padding:20px;
+}
+.modal{
+  width:min(900px, 96vw);
+  border-radius: 16px;
+  border:1px solid var(--border);
+  background: linear-gradient(180deg, var(--surface), var(--surface-2));
+  box-shadow: var(--shadow);
+}
+.modal-header{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 14px;
+  border-bottom:1px solid var(--border);
+}
+.modal-title{font-weight:800}
+.modal-body{padding:14px}
+
+.split{
+  display:grid;
+  grid-template-columns: 1.2fr .8fr;
+  gap:14px;
+}
+
+.mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}
+
+/* Utilidades */
+.w-100{width:100%}
+.right{margin-left:auto}
+.divider{
+  height:1px;
+  background: var(--border-2);
+  margin:10px 0;
+}
+
+/* Scrollbars (Windows) */
+*{scrollbar-width: thin; scrollbar-color: rgba(15,23,42,.28) transparent;}
+*::-webkit-scrollbar{height:10px; width:10px}
+*::-webkit-scrollbar-thumb{background: rgba(15,23,42,.20); border-radius:999px}
+*::-webkit-scrollbar-thumb:hover{background: rgba(15,23,42,.28)}
+

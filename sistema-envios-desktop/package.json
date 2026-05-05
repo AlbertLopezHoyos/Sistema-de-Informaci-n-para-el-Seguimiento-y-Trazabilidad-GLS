@@ -1,0 +1,24 @@
+{
+  "name": "sistema-envios-desktop",
+  "version": "1.0.0",
+  "description": "Sistema de Información para el Seguimiento y Trazabilidad de Envíos (Electron + Firebase Firestore)",
+  "main": "src/main/main.js",
+  "author": "GRUPO LOGÍSTICO SALAZAR S.A.C. (Proyecto académico)",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "test": "jest",
+    "seed": "node database/scripts/run-seed.js",
+    "seed:clear": "node database/scripts/05-clear-demo-data.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "electron": "^37.2.5",
+    "firebase": "^12.12.1",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "jest": "^30.0.5"
+  }
+}

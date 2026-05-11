@@ -19,6 +19,10 @@ async function listarEstados() {
 
 async function actualizarEstado(payload) {
   const data = buildActualizacionEstado(payload);
+  const esEntrega = String(data.estado || "").trim() === "Entregado";
+  if (esEntrega && !(String(data.evidenciaReferencia || "").trim().length >= 4)) {
+    throw new Error("Para estado Entregado indique evidencia de entrega (referencia, mín. 4 caracteres).");
+  }
   if (!estadosPermitidos.includes(data.estado)) {
     throw new Error(`Estado no permitido: ${data.estado}`);
   }
@@ -33,23 +37,32 @@ async function actualizarEstado(payload) {
     const envioRef = doc(db, "envios", data.codigoEnvio);
     const historialRef = doc(db, "historial_envios", `${data.codigoEnvio}__${fechaActualizacion}`);
 
-    tx.set(
-      historialRef,
-      {
-        codigoEnvio: data.codigoEnvio,
-        estado: data.estado,
-        fechaActualizacion,
-        observacion: data.observacion || "",
-        responsable: data.responsable
-      },
-      { merge: false }
-    );
+    const histo = {
+      codigoEnvio: data.codigoEnvio,
+      estado: data.estado,
+      fechaActualizacion,
+      observacion: data.observacion || "",
+      responsable: data.responsable,
+      evidenciaReferencia: data.evidenciaReferencia || "",
+      evidenciaDetalle: data.evidenciaDetalle || "",
+      registradoPor: data.registradoPor || ""
+    };
 
-    tx.set(
-      envioRef,
-      { estadoActual: data.estado, fechaUltimaActualizacion: fechaActualizacion },
-      { merge: true }
-    );
+    tx.set(historialRef, histo, { merge: false });
+
+    const envioPatch = { estadoActual: data.estado, fechaUltimaActualizacion: fechaActualizacion };
+    if (
+      esEntrega &&
+      ((data.evidenciaReferencia || "").trim() || (data.evidenciaDetalle || "").trim())
+    ) {
+      envioPatch.evidenciaEntrega = {
+        referencia: (data.evidenciaReferencia || "").trim(),
+        detalle: (data.evidenciaDetalle || "").trim(),
+        fecha: fechaActualizacion,
+        registradoPor: data.registradoPor || ""
+      };
+    }
+    tx.set(envioRef, envioPatch, { merge: true });
   });
 
   return await buscar(data.codigoEnvio);

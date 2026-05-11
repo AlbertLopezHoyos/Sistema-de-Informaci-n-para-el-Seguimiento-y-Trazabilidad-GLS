@@ -1,0 +1,29 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "historial_envios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "codigoEnvio", "order": "ASCENDING" },
+        { "fieldPath": "fechaActualizacion", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "envios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "estadoActual", "order": "ASCENDING" },
+        { "fieldPath": "fechaRegistro", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "ubicaciones_envios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "codigoEnvio", "order": "ASCENDING" },
+        { "fieldPath": "fechaRegistro", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

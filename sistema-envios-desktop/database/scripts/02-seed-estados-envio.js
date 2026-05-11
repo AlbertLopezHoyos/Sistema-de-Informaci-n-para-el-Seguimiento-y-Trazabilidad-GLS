@@ -9,7 +9,7 @@ module.exports = async function seedEstados() {
   for (const estado of ESTADOS) {
     await setDoc(
       doc(db, "estados_envio", estado),
-      { estado, activo: true, demo: true, updatedAt: new Date().toISOString() },
+      { estado, activo: true, updatedAt: new Date().toISOString() },
       { merge: true }
     );
   }

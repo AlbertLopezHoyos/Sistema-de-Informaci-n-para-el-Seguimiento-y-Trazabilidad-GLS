@@ -84,6 +84,16 @@
   let enviosActivos = [];
   let unsubscribe = null;
 
+  function codigoDeepLinkDesdeUrl() {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      return (p.get("codigo") || p.get("c") || "").trim() || null;
+    } catch {
+      return null;
+    }
+  }
+  const CODIGO_DESDE_URL = codigoDeepLinkDesdeUrl();
+
   function setBusy(busy, text) {
     statusEl.textContent = text || "";
   }
@@ -108,14 +118,24 @@
       .slice()
       .reverse()
       .map((h) => {
+        const evRef = (h.evidenciaReferencia || "").trim();
+        const evDet = (h.evidenciaDetalle || "").trim();
+        const evLine =
+          evRef || evDet
+            ? `<div class="t-obs">Evidencia: <b>${escapeHtml(evRef || "—")}</b>${
+                evDet ? ` <span class="muted">· ${escapeHtml(evDet)}</span>` : ""
+              }</div>`
+            : "";
+        const por = (h.registradoPor || "").trim();
         return `
           <div class="t-item">
             <div class="t-top">
               <div class="t-state">${escapeHtml(h.estado || "")}</div>
               <div class="t-meta mono">${escapeHtml(h.fechaActualizacion || "")}</div>
             </div>
-            <div class="t-meta">${escapeHtml(h.responsable || "")}</div>
+            <div class="t-meta">${escapeHtml(h.responsable || "")}${por ? ` · <span class="mono">${escapeHtml(por)}</span>` : ""}</div>
             ${h.observacion ? `<div class="t-obs">${escapeHtml(h.observacion)}</div>` : ""}
+            ${evLine}
           </div>
         `;
       })
@@ -127,7 +147,13 @@
           <td><span class="mono">${escapeHtml(h.fechaActualizacion || "")}</span></td>
           <td>${escapeHtml(h.estado || "")}</td>
           <td>${escapeHtml(h.observacion || "")}</td>
+          <td>${escapeHtml((h.evidenciaReferencia || "").trim() || "—")}${
+            (h.evidenciaDetalle || "").trim()
+              ? `<div class="muted" style="font-size:12px">${escapeHtml((h.evidenciaDetalle || "").trim())}</div>`
+              : ""
+          }</td>
           <td>${escapeHtml(h.responsable || "")}</td>
+          <td class="mono">${escapeHtml((h.registradoPor || "").trim() || "—")}</td>
         </tr>
       `
       )
@@ -156,6 +182,20 @@
             <div><b>${escapeHtml(envio.remitente?.nombres || "")}</b> · ${escapeHtml(envio.remitente?.documento || "")}</div>
             <div class="muted" style="margin-top:10px">Destinatario</div>
             <div><b>${escapeHtml(envio.destinatario?.nombres || "")}</b> · ${escapeHtml(envio.destinatario?.documento || "")}</div>
+            ${
+              envio.clienteAsociado
+                ? `<div class="divider" style="margin:12px 0"></div>
+            <div class="muted">Cliente catálogo</div>
+            <div><b>${escapeHtml(envio.clienteAsociado.nombres || "")}</b> · ${escapeHtml(envio.clienteAsociado.documento || "")}</div>
+            ${
+              envio.clienteAsociado.empresa
+                ? `<div class="muted" style="margin-top:6px">Empresa</div><div>${escapeHtml(envio.clienteAsociado.empresa)}</div>`
+                : ""
+            }
+            <div class="muted" style="margin-top:6px">Contacto / dirección</div>
+            <div>${escapeHtml(envio.clienteAsociado.telefono || "")} · ${escapeHtml(envio.clienteAsociado.direccion || "")}</div>`
+                : ""
+            }
           </div>
           <div class="card" style="box-shadow:none">
             <div class="card-title">Carga</div>
@@ -190,6 +230,28 @@
               : `<div class="card" style="box-shadow:none"><div class="muted">Sin cotización en el registro inicial.</div></div>`
           }
         </div>
+        ${
+          envio.evidenciaEntrega &&
+          ((envio.evidenciaEntrega.referencia || "").trim() || (envio.evidenciaEntrega.detalle || "").trim())
+            ? `<div class="card" style="box-shadow:none; margin-top:12px">
+            <div class="card-title">Evidencia de entrega (última registrada)</div>
+            <div>Referencia: <b>${escapeHtml((envio.evidenciaEntrega.referencia || "").trim() || "—")}</b></div>
+            ${
+              (envio.evidenciaEntrega.detalle || "").trim()
+                ? `<div style="margin-top:6px" class="muted">${escapeHtml((envio.evidenciaEntrega.detalle || "").trim())}</div>`
+                : ""
+            }
+            <div class="muted" style="margin-top:8px; font-size:12px">
+              Fecha: <span class="mono">${escapeHtml(envio.evidenciaEntrega.fecha || "")}</span>
+              ${
+                (envio.evidenciaEntrega.registradoPor || "").trim()
+                  ? ` · Registrado por <span class="mono">${escapeHtml(envio.evidenciaEntrega.registradoPor)}</span>`
+                  : ""
+              }
+            </div>
+          </div>`
+            : ""
+        }
       </div>
 
       <div class="grid grid-2">
@@ -198,6 +260,17 @@
           <div class="form-row">
             <div class="field"><label>Estado</label><select id="estadoSel">${estadoOptions}</select></div>
             <div class="field"><label>Observación</label><textarea id="obs" placeholder="Detalle del cambio de estado..."></textarea></div>
+            <div id="wrapEvidenciaSeg" style="display:none">
+              <div class="field">
+                <label>Evidencia de entrega (referencia)</label>
+                <input id="evidRefSeg" maxlength="280" placeholder="Obligatorio si el estado es Entregado (mín. 4 caracteres)" />
+              </div>
+              <div class="field">
+                <label>Detalle de evidencia</label>
+                <textarea id="evidDetSeg" rows="2" placeholder="Opcional (ej. receptor, lugar, notas)"></textarea>
+              </div>
+            </div>
+            <div class="muted" style="font-size:12px">Para <b>Entregado</b> debe indicarse la referencia de evidencia según política operativa.</div>
             <div class="actions">
               <button class="btn btn-primary btn-icon" id="btnActualizar"><span class="ico">${ICONS.status}</span>Guardar cambio</button>
               <span class="muted" id="status2"></span>
@@ -214,9 +287,9 @@
             <div style="margin-top:10px">
               <table class="table">
                 <thead>
-                  <tr><th>Fecha</th><th>Estado</th><th>Observación</th><th>Responsable</th></tr>
+                  <tr><th>Fecha</th><th>Estado</th><th>Observación</th><th>Evidencia</th><th>Responsable</th><th>Usuario</th></tr>
                 </thead>
-                <tbody>${historialRows || `<tr><td colspan="4" class="muted">Sin historial</td></tr>`}</tbody>
+                <tbody>${historialRows || `<tr><td colspan="6" class="muted">Sin historial</td></tr>`}</tbody>
               </table>
             </div>
           </details>
@@ -228,9 +301,34 @@
     const estadoSel = document.getElementById("estadoSel");
     const obs = document.getElementById("obs");
     const status2 = document.getElementById("status2");
+    const wrapEvid = document.getElementById("wrapEvidenciaSeg");
+    const evidRef = document.getElementById("evidRefSeg");
+    const evidDet = document.getElementById("evidDetSeg");
+
+    function syncEvidenciaVisibility() {
+      const ent = String(estadoSel.value || "").trim() === "Entregado";
+      wrapEvid.style.display = ent ? "" : "none";
+    }
+    function onEstadoChange() {
+      syncEvidenciaVisibility();
+      window.GlsAlert.clearAlert(alertEl);
+    }
+    estadoSel.addEventListener("change", onEstadoChange);
+    syncEvidenciaVisibility();
+
+    const MSG_EVIDENCIA_ENTREGADO =
+      "Para estado Entregado indique evidencia de entrega (referencia, mín. 4 caracteres).";
+    evidRef?.addEventListener?.("input", () => window.GlsAlert.clearAlert(alertEl));
 
     btnActualizar.addEventListener("click", async () => {
       window.GlsAlert.clearAlert(alertEl);
+      const estado = String(estadoSel.value || "").trim();
+      const refTrim = String(evidRef?.value ?? "").trim();
+      if (estado === "Entregado" && refTrim.length < 4) {
+        window.GlsAlert.showAlert(alertEl, { type: "error", message: MSG_EVIDENCIA_ENTREGADO });
+        evidRef?.focus?.();
+        return;
+      }
       btnActualizar.disabled = true;
       status2.textContent = "Actualizando...";
       try {
@@ -238,7 +336,9 @@
           codigoEnvio: envio.codigoEnvio,
           estado: estadoSel.value,
           observacion: obs.value,
-          responsable: "Área de operaciones"
+          responsable: "Área de operaciones",
+          evidenciaReferencia: evidRef?.value ?? "",
+          evidenciaDetalle: evidDet?.value ?? ""
         });
         if (!r?.ok) {
           window.GlsAlert.showAlert(alertEl, { type: "error", message: r?.error || "No se pudo actualizar" });
@@ -296,7 +396,10 @@
             e.codigoEnvio,
             e.origen,
             e.destino,
-            e.estadoActual
+            e.estadoActual,
+            e.clienteAsociado?.nombres,
+            e.clienteAsociado?.documento,
+            e.clienteAsociado?.empresa
           ]
             .map(normalize)
             .join(" ");
@@ -331,7 +434,7 @@
 
   filterEl.addEventListener("input", () => renderLista());
 
-  function startRealtime() {
+  function startRealtime(saltarAutoSeleccionPrimero) {
     setBusy(true, "Conectando...");
     unsubscribe = window.glsApi.envios.subscribeActivos((payload) => {
       if (!payload?.ok) {
@@ -343,6 +446,7 @@
       setBusy(false, `Activos: ${enviosActivos.length}`);
       renderLista();
 
+      if (saltarAutoSeleccionPrimero) return;
       // Auto-selección del primero si no hay detalle cargado
       if (!resultEl.innerHTML.trim() && enviosActivos.length) {
         buscarPorCodigo(enviosActivos[0].codigoEnvio);
@@ -354,7 +458,14 @@
     try { unsubscribe?.(); } catch {}
   });
 
-  startRealtime();
+  window.GlsAuthGuard?.requireAuthOrRedirect?.().then((user) => {
+    window.GlsMenu?.mountAuthMenu?.();
+    if (!user) return;
+    if (CODIGO_DESDE_URL) {
+      void buscarPorCodigo(CODIGO_DESDE_URL);
+    }
+    startRealtime(!!CODIGO_DESDE_URL);
+  });
 
   function escapeHtml(s) {
     return String(s)

@@ -17,10 +17,6 @@ function dimensionesAMetros(d) {
   throw new Error("Unidad de dimensión inválida");
 }
 
-/**
- * Cotización simple para operaciones internas (no fiscal).
- * Combina peso real vs peso volumétrico (aprox.) y suma componentes opcionales por tarifas ingresadas.
- */
 function calcularCotizacion({ pesoKg, dimensiones, cotizacion }) {
   const pesoReal = Number(pesoKg);
   if (!Number.isFinite(pesoReal)) throw new Error("Peso inválido para cotización");
@@ -62,8 +58,7 @@ function calcularCotizacion({ pesoKg, dimensiones, cotizacion }) {
       seguroMonto: round2(seguroMonto),
       totalEstimado: round2(totalEstimado)
     },
-    nota:
-      "Estimación operativa interna. Ajustar tarifas según política comercial / tabla vigente de la empresa."
+    nota: "Cotización generada según parámetros y tarifas configuradas."
   };
 }
 

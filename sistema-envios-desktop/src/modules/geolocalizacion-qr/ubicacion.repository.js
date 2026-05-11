@@ -7,7 +7,6 @@ const {
   query,
   where,
   getDocs,
-  orderBy,
   limit
 } = require("../../config/firebase.config");
 
@@ -25,16 +24,16 @@ async function addUbicacion(entry) {
 }
 
 async function getLastUbicacion(codigoEnvio) {
-  const q = query(
-    collection(getDb(), "ubicaciones_envios"),
-    where("codigoEnvio", "==", codigoEnvio),
-    orderBy("fechaRegistro", "desc"),
-    limit(1)
-  );
+  const q = query(collection(getDb(), "ubicaciones_envios"), where("codigoEnvio", "==", codigoEnvio), limit(80));
   const snap = await getDocs(q);
   if (snap.empty) return null;
-  const d = snap.docs[0];
-  return { id: d.id, ...d.data() };
+  const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  rows.sort((a, b) => {
+    const ta = Date.parse(a.fechaRegistro || "") || 0;
+    const tb = Date.parse(b.fechaRegistro || "") || 0;
+    return tb - ta;
+  });
+  return rows[0];
 }
 
 async function upsertQr(data) {

@@ -3,19 +3,21 @@
   "version": "1.0.0",
   "description": "Sistema de Información para el Seguimiento y Trazabilidad de Envíos (Electron + Firebase Firestore)",
   "main": "src/main/main.js",
-  "author": "GRUPO LOGÍSTICO SALAZAR S.A.C. (Proyecto académico)",
+  "author": "GRUPO LOGÍSTICO SALAZAR S.A.C.",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
     "test": "jest",
-    "seed": "node database/scripts/run-seed.js",
-    "seed:clear": "node database/scripts/05-clear-demo-data.js"
+    "seed:init": "node database/scripts/run-seed.js",
+    "seed:reset": "node database/scripts/05-reset-data.js"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.2",
     "dotenv": "^16.6.1",
     "electron": "^37.2.5",
     "firebase": "^12.12.1",
+    "leaflet": "^1.9.4",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {

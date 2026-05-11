@@ -6,7 +6,6 @@ const {
   query,
   where,
   getDocs,
-  orderBy,
   setDoc
 } = require("../../config/firebase.config");
 
@@ -21,13 +20,15 @@ async function getEnvioByCodigo(codigoEnvio) {
 }
 
 async function getHistorialByCodigo(codigoEnvio) {
-  const q = query(
-    collection(getDb(), "historial_envios"),
-    where("codigoEnvio", "==", codigoEnvio),
-    orderBy("fechaActualizacion", "asc")
-  );
+  const q = query(collection(getDb(), "historial_envios"), where("codigoEnvio", "==", codigoEnvio));
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  return rows.slice().sort((a, b) => {
+    const ta = Date.parse(a.fechaActualizacion || "") || 0;
+    const tb = Date.parse(b.fechaActualizacion || "") || 0;
+    if (ta !== tb) return ta - tb;
+    return String(a.id || "").localeCompare(String(b.id || ""));
+  });
 }
 
 async function listEstadosEnvio() {

@@ -10,13 +10,23 @@ const appConfig = require("../config/app.config");
 const { envioController } = require("../modules/envios/envio.controller");
 const { trazabilidadController } = require("../modules/trazabilidad/trazabilidad.controller");
 const { geolocalizacionQrController } = require("../modules/geolocalizacion-qr/geolocalizacionQr.controller");
+const { authController } = require("../modules/auth/auth.controller");
+const { clienteController } = require("../modules/clientes/cliente.controller");
 const envioService = require("../modules/envios/envio.service");
 
 let mainWindow = null;
 const activeSubs = new Map(); // webContentsId -> unsubscribe()
+let currentUser = null; // session in main process
 
 function getPagePath(pageFileName) {
   return path.join(__dirname, "..", "renderer", "pages", pageFileName);
+}
+
+function requireAdmin() {
+  if (!currentUser || currentUser.rol !== "admin") {
+    return { ok: false, error: "Requiere rol administrador." };
+  }
+  return null;
 }
 
 async function createMainWindow() {
@@ -24,7 +34,7 @@ async function createMainWindow() {
 
   mainWindow.once("ready-to-show", () => mainWindow.show());
 
-  const startPage = getPagePath("dashboard.html");
+  const startPage = getPagePath("login.html");
   await mainWindow.loadFile(startPage);
 
   mainWindow.on("closed", () => {
@@ -40,6 +50,97 @@ function registerIpcHandlers() {
     defaults: appConfig.cotizacionDefaults
   }));
 
+  ipcMain.handle("auth:me", async () => ({ ok: true, user: currentUser }));
+
+  ipcMain.handle("auth:logout", async () => {
+    currentUser = null;
+    return { ok: true };
+  });
+
+  ipcMain.handle("auth:policy", async () => {
+    try {
+      const n = await authController.countUsers();
+      return { ok: true, registroAbierto: n === 0, usuariosRegistrados: n };
+    } catch (err) {
+      return { ok: false, error: err?.message || String(err) };
+    }
+  });
+
+  ipcMain.handle("auth:register", async (_evt, payload) => {
+    try {
+      const n = await authController.countUsers();
+      if (n > 0) {
+        return { ok: false, error: "El registro directo está deshabilitado. Solicite alta a un administrador." };
+      }
+      const user = await authController.register(payload);
+      currentUser = user;
+      return { ok: true, user };
+    } catch (err) {
+      return { ok: false, error: err?.message || String(err) };
+    }
+  });
+
+  ipcMain.handle("auth:login", async (_evt, payload) => {
+    try {
+      const user = await authController.login(payload);
+      currentUser = user;
+      return { ok: true, user };
+    } catch (err) {
+      return { ok: false, error: err?.message || String(err) };
+    }
+  });
+
+  ipcMain.handle("auth:listUsers", async () => {
+    const gate = requireAdmin();
+    if (gate) return gate;
+    try {
+      const users = await authController.listUsersAdmin();
+      return { ok: true, users };
+    } catch (err) {
+      return { ok: false, error: err?.message || String(err) };
+    }
+  });
+
+  ipcMain.handle("auth:inviteUser", async (_evt, payload) => {
+    const gate = requireAdmin();
+    if (gate) return gate;
+    try {
+      const user = await authController.inviteUser(payload);
+      return { ok: true, user };
+    } catch (err) {
+      return { ok: false, error: err?.message || String(err) };
+    }
+  });
+
+  ipcMain.handle("auth:setActivo", async (_evt, payload) => {
+    const gate = requireAdmin();
+    if (gate) return gate;
+    try {
+      const user = await authController.setUsuarioActivo(payload || {});
+      return { ok: true, user };
+    } catch (err) {
+      return { ok: false, error: err?.message || String(err) };
+    }
+  });
+
+  ipcMain.handle("clientes:listar", async (_evt, payload) => {
+    try {
+      const clientes = await clienteController.listar(payload || {});
+      return { ok: true, clientes };
+    } catch (err) {
+      return { ok: false, error: err?.message || String(err) };
+    }
+  });
+
+  ipcMain.handle("clientes:crear", async (_evt, payload) => {
+    try {
+      const cliente = await clienteController.crear(payload || {});
+      return { ok: true, cliente };
+    } catch (err) {
+      return { ok: false, error: err?.message || String(err) };
+    }
+  });
+
   ipcMain.handle("envios:previewCotizacion", async (_evt, payload) => {
     try {
       return envioController.previewCotizacion(payload);
@@ -50,7 +151,11 @@ function registerIpcHandlers() {
 
   ipcMain.handle("envios:crear", async (_evt, payload) => {
     try {
-      return await envioController.crearEnvio(payload);
+      const body = {
+        ...(payload || {}),
+        registradoPor: currentUser?.email || currentUser?.nombres || ""
+      };
+      return await envioController.crearEnvio(body);
     } catch (err) {
       return { ok: false, error: err?.message || String(err) };
     }
@@ -141,7 +246,11 @@ function registerIpcHandlers() {
 
   ipcMain.handle("trazabilidad:actualizarEstado", async (_evt, payload) => {
     try {
-      return await trazabilidadController.actualizarEstado(payload);
+      const body = {
+        ...(payload || {}),
+        registradoPor: currentUser?.email || currentUser?.nombres || ""
+      };
+      return await trazabilidadController.actualizarEstado(body);
     } catch (err) {
       return { ok: false, error: err?.message || String(err) };
     }

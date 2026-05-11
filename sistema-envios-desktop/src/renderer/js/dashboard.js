@@ -45,7 +45,7 @@
         <div class="card kpi kpi-accent">
           <div>
             <div class="num" id="kpiTotal">—</div>
-            <div class="label">Total de envíos (muestra)</div>
+            <div class="label">Total de envíos</div>
           </div>
           <div class="ico" aria-hidden="true">${ICONS.box}</div>
         </div>
@@ -75,7 +75,7 @@
           </div>
           <div class="card">
             <div class="card-title">Acciones rápidas</div>
-            <div class="card-subtitle">Navega con el menú lateral. Recomendado: cargar estados iniciales con seed.</div>
+            <div class="card-subtitle">Navega con el menú lateral para acceder a registro, trazabilidad, historial y geolocalización.</div>
             <div class="actions">
               <a class="btn btn-primary btn-icon" href="./registro-envio.html"><span class="ico">${ICONS.box}</span>Nuevo envío</a>
               <a class="btn btn-icon" href="./historial.html"><span class="ico">${ICONS.box}</span>Historial general</a>
@@ -88,7 +88,7 @@
       <div class="grid" style="margin-top:14px">
         <div class="card">
           <div class="card-title">Estado del sistema</div>
-          <div class="card-subtitle">Aplicación local (Electron) conectada a Firestore (Spark). QR se genera localmente en PNG.</div>
+          <div class="card-subtitle">Aplicación local (Electron) conectada a Firestore. QR se genera localmente en PNG.</div>
           <div class="actions">
             <div class="badge ok">Electron: OK</div>
             <div class="badge info">Firestore: conectado</div>
@@ -99,6 +99,8 @@
       </div>
     </main>
   `;
+
+  window.GlsAuthGuard?.requireAuthOrRedirect?.().then(() => window.GlsMenu?.mountAuthMenu?.());
 
   const alertEl = document.getElementById("alert");
   window.GlsAlert.clearAlert(alertEl);

@@ -116,6 +116,9 @@
                 <div class="mono">${escapeHtml(qr?.contenidoQr || codigo || "")}</div>
                 <div class="muted" style="margin-top:10px">Ruta local</div>
                 <div class="mono">${escapeHtml(qr?.rutaLocalQr || "src/renderer/assets/qr/" + codigo + ".png")}</div>
+                <div class="hint" style="margin-top:10px">
+                  <a href="./consulta-envio.html?codigo=${encodeURIComponent(codigo)}">Consulta por código (enlace compartible)</a>
+                </div>
               </div>
             </div>
           </div>
@@ -236,10 +239,12 @@
       }
 
       map = window.L.map(mapEl).setView([center.lat, center.lng], 12);
-      window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-      }).addTo(map);
+      const tiles =
+        (window.GlsMapConfig && window.GlsMapConfig.tilesUrl) || "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+      const attribution =
+        (window.GlsMapConfig && window.GlsMapConfig.attribution) ||
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+      window.L.tileLayer(tiles, { maxZoom: 19, attribution }).addTo(map);
 
       marker = window.L.marker([center.lat, center.lng]).addTo(map);
 
@@ -283,6 +288,25 @@
   btnBuscar.addEventListener("click", buscar);
   codigoEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter") buscar();
+  });
+
+  function codigoDesdeUrlGeo() {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      return (p.get("codigo") || p.get("c") || "").trim();
+    } catch {
+      return "";
+    }
+  }
+
+  window.GlsAuthGuard?.requireAuthOrRedirect?.().then((user) => {
+    window.GlsMenu?.mountAuthMenu?.();
+    if (!user) return;
+    const pre = codigoDesdeUrlGeo();
+    if (pre) {
+      codigoEl.value = pre;
+      buscar();
+    }
   });
 
   function escapeHtml(s) {

@@ -14,6 +14,20 @@ contextBridge.exposeInMainWorld("glsApi", {
     ping: () => invoke("app:ping"),
     getCotizacionDefaults: () => invoke("app:getCotizacionDefaults")
   },
+  auth: {
+    policy: () => invoke("auth:policy"),
+    me: () => invoke("auth:me"),
+    login: (payload) => invoke("auth:login", payload),
+    register: (payload) => invoke("auth:register", payload),
+    logout: () => invoke("auth:logout"),
+    listUsers: () => invoke("auth:listUsers"),
+    inviteUser: (payload) => invoke("auth:inviteUser", payload),
+    setActivo: (payload) => invoke("auth:setActivo", payload)
+  },
+  clientes: {
+    listar: (opts) => invoke("clientes:listar", opts || {}),
+    crear: (payload) => invoke("clientes:crear", payload)
+  },
   envios: {
      previewCotizacion: (data) => invoke("envios:previewCotizacion", data),
      crear: (data) => invoke("envios:crear", data),

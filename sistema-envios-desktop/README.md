@@ -5,7 +5,7 @@
 Este proyecto es una **aplicación de escritorio** (NO web) construida con:
 
 - Electron + Node.js (main process)
-- Firebase Firestore (plan gratuito)
+- Firebase Firestore
 - HTML/CSS/JS para ventanas internas (renderer)
 - Leaflet + OpenStreetMap (mapa)
 - `qrcode` (QR local en PNG)
@@ -50,18 +50,16 @@ Se abrirá la ventana principal con menú lateral:
 - Seguimiento / Trazabilidad
 - Geolocalización + QR
 
-## Scripts de datos de prueba (seed)
-
-> Nota: estos scripts usan el mismo SDK de Firebase (cliente). Asegúrate de que tus reglas permitan escritura en desarrollo.
+## Inicialización de datos (seed)
 
 ```bash
-npm run seed
+npm run seed:init
 ```
 
-Para borrar datos demo:
+Para reiniciar colecciones (elimina datos y vuelve a iniciar):
 
 ```bash
-npm run seed:clear
+npm run seed:reset
 ```
 
 ## Estructura del proyecto
@@ -69,8 +67,8 @@ npm run seed:clear
 - `src/main/`: proceso principal de Electron + IPC
 - `src/modules/`: lógica de negocio (model/repository/service/controller)
 - `src/renderer/`: HTML/CSS/JS de ventanas internas (UI)
-- `database/scripts/`: seeds para Firestore
-- `tests/`: pruebas unitarias (Jest)
+- `database/scripts/`: inicialización de datos (Firestore)
+- `tests/`: tests automatizados (Jest)
 
 ## Notas importantes
 

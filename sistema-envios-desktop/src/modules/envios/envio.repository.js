@@ -30,16 +30,15 @@ function countersDocRef(counterId) {
 }
 
 async function listEnviosActivos({ limitCount = 200 } = {}) {
-  // Activos = no entregado / no cancelado (ajustable)
-  const activos = ["Registrado", "En tránsito", "En reparto", "Observado"];
-  const q = query(enviosCol(), where("estadoActual", "in", activos), orderBy("fechaRegistro", "desc"), limit(limitCount));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  // Sin `where in` + orderBy (evita índice compuesto). Se lee por fecha y se filtra en memoria.
+  const activos = new Set(["Registrado", "En tránsito", "En reparto", "Observado"]);
+  const take = Math.min(Math.max(Number(limitCount) * 6, 400), 2000);
+  const snap = await getDocs(query(enviosCol(), orderBy("fechaRegistro", "desc"), limit(take)));
+  const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((e) => activos.has(e.estadoActual || ""));
+  return rows.slice(0, limitCount);
 }
 
 async function listEnviosHistorial({ estado = "Todos", limitCount = 800 } = {}) {
-  // Nota: Firestore requiere índices compuestos para `where + orderBy` en campos distintos.
-  // Por robustez (especialmente en proyectos nuevos), filtramos por estado en cliente si hace falta.
   const baseLimit = Math.min(Math.max(Number(limitCount) || 800, 50), 2000);
 
   const snap = await getDocs(query(enviosCol(), orderBy("fechaRegistro", "desc"), limit(baseLimit)));
@@ -53,12 +52,16 @@ async function listEnviosHistorial({ estado = "Todos", limitCount = 800 } = {}) 
 }
 
 function subscribeEnviosActivos({ limitCount = 200, onData, onError } = {}) {
-  const activos = ["Registrado", "En tránsito", "En reparto", "Observado"];
-  const q = query(enviosCol(), where("estadoActual", "in", activos), orderBy("fechaRegistro", "desc"), limit(limitCount));
+  const activos = new Set(["Registrado", "En tránsito", "En reparto", "Observado"]);
+  const take = Math.min(Math.max(Number(limitCount) * 6, 400), 2000);
+  const q = query(enviosCol(), orderBy("fechaRegistro", "desc"), limit(take));
   return onSnapshot(
     q,
     (snap) => {
-      const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const items = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((e) => activos.has(e.estadoActual || ""))
+        .slice(0, limitCount);
       onData?.(items);
     },
     (err) => onError?.(err)
@@ -66,21 +69,26 @@ function subscribeEnviosActivos({ limitCount = 200, onData, onError } = {}) {
 }
 
 async function findEnvioByCodigo(codigoEnvio) {
-  const q = query(enviosCol(), where("codigoEnvio", "==", codigoEnvio), limit(1));
-  const snap = await getDocs(q);
-  if (snap.empty) return null;
-  const d = snap.docs[0];
-  return { id: d.id, ...d.data() };
+  const ref = doc(getDb(), "envios", codigoEnvio);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() };
+}
+
+function sortHistorialPorFechaAsc(rows) {
+  return rows.slice().sort((a, b) => {
+    const ta = Date.parse(a.fechaActualizacion || "") || 0;
+    const tb = Date.parse(b.fechaActualizacion || "") || 0;
+    if (ta !== tb) return ta - tb;
+    return String(a.id || "").localeCompare(String(b.id || ""));
+  });
 }
 
 async function getHistorialByCodigo(codigoEnvio) {
-  const q = query(
-    historialCol(),
-    where("codigoEnvio", "==", codigoEnvio),
-    orderBy("fechaActualizacion", "asc")
-  );
+  const q = query(historialCol(), where("codigoEnvio", "==", codigoEnvio));
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  return sortHistorialPorFechaAsc(rows);
 }
 
 async function createEnvioDoc(envio) {

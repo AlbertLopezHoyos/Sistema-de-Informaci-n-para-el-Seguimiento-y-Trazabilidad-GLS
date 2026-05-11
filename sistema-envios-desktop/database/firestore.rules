@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -------------------------------------------------------------------------
+    // DESARROLLO / DEMO: acceso amplio. En producción sustituir por reglas que
+    // usen Firebase Authentication (request.auth) o mueva escrituras al Admin SDK
+    // solo en el proceso principal de Electron (sin exponer credenciales al renderer).
+    // -------------------------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

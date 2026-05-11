@@ -26,7 +26,7 @@
 ## No funcionales
 
 - Aplicación **de escritorio** con Electron (sin servidor web).
-- Firestore en plan gratuito.
+- Firestore como base de datos (según el plan contratado).
 - Código modular (model/repository/service/controller).
 - UI moderna y usable para escritorio.
 

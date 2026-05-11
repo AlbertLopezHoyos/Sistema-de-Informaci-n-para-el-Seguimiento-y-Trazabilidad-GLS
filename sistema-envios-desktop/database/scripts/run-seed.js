@@ -9,7 +9,8 @@ async function run() {
     require("./01-create-collections"),
     require("./02-seed-estados-envio"),
     require("./03-seed-usuarios"),
-    require("./04-seed-envios-demo")
+    require("./04-seed-clientes-operativos"),
+    require("./06-seed-envios-operativos")
   ];
 
   for (const step of steps) {

@@ -17,6 +17,8 @@ const {
   subscribeEnviosActivos
 } = require("./envio.repository");
 
+const clienteRepo = require("../clientes/cliente.repository");
+
 function getQrOutputPaths(codigoEnvio) {
   const fileName = `${codigoEnvio}.png`;
   const absolute = path.join(__dirname, "..", "..", "renderer", "assets", "qr", fileName);
@@ -60,8 +62,25 @@ function previewCotizacion(payload) {
 }
 
 async function crearEnvio(payload) {
-  const draft = buildEnvioDraft(payload);
-  const codigoEnvio = await generarCodigoEnvioConsecutivo();
+  const registradoPor = String(payload?.registradoPor || "").trim();
+  const { registradoPor: _rp, ...payloadSinMeta } = payload || {};
+  const draft = buildEnvioDraft(payloadSinMeta);
+  const docCli = draft.clienteDocumentoAsociado;
+  let clienteAsociado = null;
+  if (docCli) {
+    const c = await clienteRepo.obtenerPorDocumento(docCli);
+    if (c) {
+      clienteAsociado = {
+        clienteId: c.id,
+        documento: c.documento,
+        nombres: c.nombres,
+        telefono: c.telefono,
+        direccion: c.direccion,
+        empresa: c.empresa || ""
+      };
+    }
+  }
+  const { clienteDocumentoAsociado, ...draftRest } = draft;
   const fechaRegistro = nowIso();
 
   let cotizacionEstimada = null;
@@ -73,18 +92,33 @@ async function crearEnvio(payload) {
     });
   }
 
-  const envio = {
-    codigoEnvio,
-    ...draft,
+  const envioSinCodigo = {
+    ...draftRest,
+    ...(clienteAsociado ? { clienteAsociado } : {}),
     cotizacionEstimada,
     estadoActual: "Registrado",
-    fechaRegistro,
     observacion: draft.observacion || "Sin observaciones"
   };
 
   const db = getDb();
+  const year = getYear(new Date(fechaRegistro));
+  const counterId = `ENV-${year}`;
+  const counterRef = countersDocRef(counterId);
 
+  let codigoEnvio;
   const created = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(counterRef);
+    const current = snap.exists() ? Number(snap.data()?.current || 0) : 0;
+    const next = current + 1;
+    tx.set(counterRef, { current: next, year, updatedAt: fechaRegistro }, { merge: true });
+    codigoEnvio = formatCodigoEnvio(year, next);
+
+    const envio = {
+      codigoEnvio,
+      ...envioSinCodigo,
+      fechaRegistro
+    };
+
     const envioRef = doc(db, "envios", codigoEnvio);
     tx.set(envioRef, envio, { merge: false });
 
@@ -96,7 +130,10 @@ async function crearEnvio(payload) {
         estado: "Registrado",
         fechaActualizacion: fechaRegistro,
         observacion: "Registro inicial del envío",
-        responsable: areaResponsableDefault
+        responsable: areaResponsableDefault,
+        evidenciaReferencia: "",
+        evidenciaDetalle: "",
+        registradoPor: registradoPor || ""
       },
       { merge: false }
     );
@@ -105,7 +142,15 @@ async function crearEnvio(payload) {
   });
 
   const { absolute, rutaLocalQr } = getQrOutputPaths(codigoEnvio);
-  await generateQrPng({ content: codigoEnvio, outputFilePath: absolute });
+  try {
+    await generateQrPng({ content: codigoEnvio, outputFilePath: absolute });
+  } catch (err) {
+    throw new Error(
+      `El envío ${codigoEnvio} se guardó correctamente, pero falló la generación del QR en disco: ${err?.message || String(
+        err
+      )}. Use Geolocalización + QR para regenerarlo.`
+    );
+  }
 
   await runTransaction(db, async (tx) => {
     const qrRef = doc(db, "qr_envios", codigoEnvio);

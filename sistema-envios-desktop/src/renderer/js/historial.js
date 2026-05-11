@@ -123,6 +123,8 @@
     </main>
   `;
 
+  window.GlsAuthGuard?.requireAuthOrRedirect?.().then(() => window.GlsMenu?.mountAuthMenu?.());
+
   const alertEl = document.getElementById("alert");
   const tblBody = document.getElementById("tblBody");
   const statusEl = document.getElementById("status");
@@ -198,6 +200,9 @@
         e.descripcion,
         e.remitente?.nombres,
         e.destinatario?.nombres,
+        e.clienteAsociado?.nombres,
+        e.clienteAsociado?.documento,
+        e.clienteAsociado?.empresa,
         e.cotizacionEstimada?.desglose?.totalEstimado,
         e.cotizacionEstimada?.moneda
       ]
@@ -296,14 +301,26 @@
         .slice()
         .reverse()
         .map((h) => {
+          const evRef = (h.evidenciaReferencia || "").trim();
+          const evDet = (h.evidenciaDetalle || "").trim();
+          const evLine =
+            evRef || evDet
+              ? `<div class="t-obs">Evidencia: <b>${escapeHtml(evRef || "—")}</b>${
+                  evDet ? ` <span class="muted">· ${escapeHtml(evDet)}</span>` : ""
+                }</div>`
+              : "";
+          const por = (h.registradoPor || "").trim();
           return `
             <div class="t-item">
               <div class="t-top">
                 <div class="t-state">${escapeHtml(h.estado || "")}</div>
                 <div class="t-meta mono">${escapeHtml(h.fechaActualizacion || "")}</div>
               </div>
-              <div class="t-meta">${escapeHtml(h.responsable || "")}</div>
+              <div class="t-meta">${escapeHtml(h.responsable || "")}${
+                por ? ` · <span class="mono">${escapeHtml(por)}</span>` : ""
+              }</div>
               ${h.observacion ? `<div class="t-obs">${escapeHtml(h.observacion)}</div>` : ""}
+              ${evLine}
             </div>
           `;
         })
@@ -332,6 +349,32 @@
                     )}</div>`
                   : `<div style="margin-top:10px" class="muted">Sin cotización en el registro.</div>`
               }
+              ${
+                envio.clienteAsociado
+                  ? `<div style="margin-top:12px" class="muted">Cliente catálogo</div>
+              <div><b>${escapeHtml(envio.clienteAsociado.nombres || "")}</b> · ${escapeHtml(
+                      envio.clienteAsociado.documento || ""
+                    )}</div>
+              ${
+                envio.clienteAsociado.empresa
+                  ? `<div class="muted" style="margin-top:6px">Empresa</div><div>${escapeHtml(envio.clienteAsociado.empresa)}</div>`
+                  : ""
+              }`
+                  : ""
+              }
+              ${
+                envio.evidenciaEntrega &&
+                ((envio.evidenciaEntrega.referencia || "").trim() || (envio.evidenciaEntrega.detalle || "").trim())
+                  ? `<div style="margin-top:12px" class="muted">Evidencia de entrega</div>
+              <div>Ref. <b>${escapeHtml((envio.evidenciaEntrega.referencia || "").trim() || "—")}</b></div>
+              ${
+                (envio.evidenciaEntrega.detalle || "").trim()
+                  ? `<div class="muted" style="margin-top:4px">${escapeHtml((envio.evidenciaEntrega.detalle || "").trim())}</div>`
+                  : ""
+              }
+              <div class="muted" style="font-size:11px;margin-top:4px">${escapeHtml(envio.evidenciaEntrega.fecha || "")}</div>`
+                  : ""
+              }
             </div>
 
             <div class="card">
@@ -339,6 +382,17 @@
               <div class="form-row">
                 <div class="field"><label>Estado</label><select id="m_estado">${estadoOptions}</select></div>
                 <div class="field"><label>Observación</label><textarea id="m_obs" placeholder="Detalle..."></textarea></div>
+                <div id="wrapEvidenciaHist" style="display:none">
+                  <div class="field">
+                    <label>Evidencia de entrega (referencia)</label>
+                    <input id="m_evid_ref" maxlength="280" placeholder="Obligatorio si estado Entregado (mín. 4 caracteres)" />
+                  </div>
+                  <div class="field">
+                    <label>Detalle evidencia</label>
+                    <textarea id="m_evid_det" rows="2" placeholder="Opcional"></textarea>
+                  </div>
+                </div>
+                <div class="muted" style="font-size:12px">Entregado requiere referencia de evidencia.</div>
                 <div class="actions">
                   <button class="btn btn-primary" id="m_save">Guardar</button>
                 </div>
@@ -357,22 +411,50 @@
       const saveBtn = overlay.querySelector("#m_save");
       const estadoSel = overlay.querySelector("#m_estado");
       const obs = overlay.querySelector("#m_obs");
+      const wrapEvid = overlay.querySelector("#wrapEvidenciaHist");
+      const evidRef = overlay.querySelector("#m_evid_ref");
+      const evidDet = overlay.querySelector("#m_evid_det");
+
+      function syncEvidenciaVisibility() {
+        const ent = String(estadoSel.value || "").trim() === "Entregado";
+        wrapEvid.style.display = ent ? "" : "none";
+      }
+      function onEstadoChange() {
+        syncEvidenciaVisibility();
+        window.GlsAlert.clearAlert(alertEl);
+      }
+      estadoSel.addEventListener("change", onEstadoChange);
+      syncEvidenciaVisibility();
+
+      const MSG_EVIDENCIA_ENTREGADO =
+        "Para estado Entregado indique evidencia de entrega (referencia, mín. 4 caracteres).";
+      evidRef?.addEventListener?.("input", () => window.GlsAlert.clearAlert(alertEl));
 
       saveBtn.addEventListener("click", async () => {
         try {
+          window.GlsAlert.clearAlert(alertEl);
+          const estado = String(estadoSel.value || "").trim();
+          const refTrim = String(evidRef?.value ?? "").trim();
+          if (estado === "Entregado" && refTrim.length < 4) {
+            window.GlsAlert.showAlert(alertEl, { type: "error", message: MSG_EVIDENCIA_ENTREGADO });
+            evidRef?.focus?.();
+            return;
+          }
           saveBtn.disabled = true;
           const r = await window.glsApi.trazabilidad.actualizarEstado({
             codigoEnvio: envio.codigoEnvio,
             estado: estadoSel.value,
             observacion: obs.value,
-            responsable: "Área de operaciones"
+            responsable: "Área de operaciones",
+            evidenciaReferencia: evidRef?.value ?? "",
+            evidenciaDetalle: evidDet?.value ?? ""
           });
           if (!r?.ok) {
             window.GlsAlert.showAlert(alertEl, { type: "error", message: r?.error || "No se pudo actualizar" });
             saveBtn.disabled = false;
             return;
           }
-          overlay.remove();
+          window.GlsModal.dismissOverlay(overlay);
           await load();
         } catch (e) {
           window.GlsAlert.showAlert(alertEl, { type: "error", message: e?.message || String(e) });

@@ -2,7 +2,7 @@
 
 ## 1) Dashboard
 
-- Muestra accesos rápidos a los módulos.
+- Presenta accesos rápidos a los módulos.
 
 ## 2) Registro de envío
 

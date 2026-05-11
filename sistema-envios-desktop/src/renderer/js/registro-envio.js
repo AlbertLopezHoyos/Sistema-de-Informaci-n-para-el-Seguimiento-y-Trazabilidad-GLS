@@ -21,7 +21,35 @@
     if (/deadline-exceeded|DEADLINE_EXCEEDED|timeout/i.test(m)) {
       return "Tiempo de espera agotado. Verifica tu conexión.";
     }
-    return m;
+    if (/already exists|ALREADY_EXISTS|Document already exists/i.test(m)) {
+      return "Conflicto al asignar el código del envío. Vuelve a intentar guardar; el sistema generará un nuevo consecutivo.";
+    }
+    if (/transaction|Transaction failed|aborted/i.test(m)) {
+      return "No se pudo completar el guardado en base de datos. Reintenta en unos segundos.";
+    }
+    if (/Campo requerido:/i.test(m)) {
+      const campo = m.replace(/^.*Campo requerido:\s*/i, "").trim();
+      return `Falta un dato obligatorio${campo ? ` (${campo})` : ""}. Revisa el formulario.`;
+    }
+    if (/Número inválido|Debe ser mayor a 0|No puede ser negativo|Documento inválido|Teléfono inválido|Unidad de medida inválida|Seguro inválido/i.test(m)) {
+      return `Dato numérico o formato incorrecto: ${m}`;
+    }
+    return m || "Ocurrió un error al guardar. Revisa los datos e intenta de nuevo.";
+  }
+
+  function validateRequiredText(v, label) {
+    const s = String(v ?? "").trim();
+    if (!s) return `${label}: este campo es obligatorio`;
+    return null;
+  }
+
+  function validatePositiveNumber(v, label) {
+    const s = String(v ?? "").trim();
+    if (!s) return `${label}: este campo es obligatorio`;
+    const n = Number(s.replace(",", "."));
+    if (!Number.isFinite(n)) return `${label}: ingrese un número válido`;
+    if (n <= 0) return `${label}: debe ser mayor que cero`;
+    return null;
   }
 
   function validateDocumentoUi(v, label) {
@@ -40,10 +68,22 @@
 
   function validateRegistroForm(fd) {
     const checks = [
+      validateRequiredText(fd.get("r_nombres"), "Remitente · nombres completos"),
       validateDocumentoUi(fd.get("r_documento"), "Remitente · documento"),
       validateTelefonoUi(fd.get("r_telefono"), "Remitente · teléfono"),
+      validateRequiredText(fd.get("r_direccion"), "Remitente · dirección"),
+      validateRequiredText(fd.get("d_nombres"), "Destinatario · nombres completos"),
       validateDocumentoUi(fd.get("d_documento"), "Destinatario · documento"),
-      validateTelefonoUi(fd.get("d_telefono"), "Destinatario · teléfono")
+      validateTelefonoUi(fd.get("d_telefono"), "Destinatario · teléfono"),
+      validateRequiredText(fd.get("d_direccion"), "Destinatario · dirección"),
+      validateRequiredText(fd.get("origen"), "Envío · origen"),
+      validateRequiredText(fd.get("destino"), "Envío · destino"),
+      validateRequiredText(fd.get("tipoCarga"), "Envío · tipo de carga"),
+      validateRequiredText(fd.get("descripcion"), "Envío · descripción"),
+      validatePositiveNumber(fd.get("peso"), "Envío · peso (kg)"),
+      validatePositiveNumber(fd.get("dim_largo"), "Dimensiones · largo"),
+      validatePositiveNumber(fd.get("dim_ancho"), "Dimensiones · ancho"),
+      validatePositiveNumber(fd.get("dim_alto"), "Dimensiones · alto")
     ];
     return checks.find(Boolean) || null;
   }
@@ -90,6 +130,25 @@
       <div id="alert"></div>
 
       <form id="formEnvio" class="grid" autocomplete="off">
+        <section class="form-section">
+          <div class="section-head">
+            <h3 class="title">Cliente (catálogo)</h3>
+            <span class="section-chip">Empresa</span>
+          </div>
+          <div class="form-row grid grid-2" style="align-items:end">
+            <div class="field">
+              <label>Seleccionar cliente registrado</label>
+              <select id="selClienteCatalogo" name="cliente_documento_catalogo">
+                <option value="">Sin asociación a catálogo</option>
+              </select>
+            </div>
+            <div class="actions" style="align-self:end">
+              <a class="btn btn-icon" href="./clientes.html">Gestionar clientes</a>
+            </div>
+          </div>
+          <div class="hint">Si eliges un cliente del catálogo, se completarán los datos del remitente cuando sea posible y el envío quedará enlazado al catálogo.</div>
+        </section>
+
         <div class="grid grid-2">
           <section class="form-section">
             <div class="section-head">
@@ -224,12 +283,72 @@
     </main>
   `;
 
+  window.GlsAuthGuard?.requireAuthOrRedirect?.().then(() => window.GlsMenu?.mountAuthMenu?.());
+
   const alertEl = document.getElementById("alert");
   const form = document.getElementById("formEnvio");
   const statusEl = document.getElementById("status");
   const btnGuardar = document.getElementById("btnGuardar");
   const btnLimpiar = document.getElementById("btnLimpiar");
   const cotPreviewEl = document.getElementById("cot_preview");
+  const selClienteCatalogo = document.getElementById("selClienteCatalogo");
+  /** @type {Map<string, { nombres?: string, documento?: string, telefono?: string, direccion?: string }>} */
+  const catalogoClientesPorDocumento = new Map();
+
+  function aplicarRemitenteDesdeCliente(docKey) {
+    const k = String(docKey || "").trim();
+    if (!k) return;
+    const c = catalogoClientesPorDocumento.get(k);
+    if (!c) return;
+    const setVal = (name, val) => {
+      const el = form.querySelector(`[name="${name}"]`);
+      if (el && val != null && String(val).trim() !== "") el.value = String(val).trim();
+    };
+    setVal("r_nombres", c.nombres);
+    setVal("r_documento", c.documento);
+    setVal("r_telefono", c.telefono);
+    setVal("r_direccion", c.direccion);
+    window.GlsAlert.clearAlert(alertEl);
+  }
+
+  async function cargarCatalogoClientes() {
+    if (!selClienteCatalogo) return;
+    try {
+      const r = await window.glsApi.clientes.listar({ limitCount: 500 });
+      const prev = selClienteCatalogo.value;
+      selClienteCatalogo.innerHTML = `<option value="">Sin asociación a catálogo</option>`;
+      if (!r?.ok) {
+        window.GlsAlert.showAlert(alertEl, {
+          type: "info",
+          message: r?.error ? `Catálogo de clientes no disponible: ${r.error}` : "Catálogo de clientes no disponible."
+        });
+        return;
+      }
+      catalogoClientesPorDocumento.clear();
+      for (const c of r.clientes || []) {
+        const doc = String(c.documento || "").trim();
+        if (doc) catalogoClientesPorDocumento.set(doc, c);
+        const opt = document.createElement("option");
+        opt.value = c.documento || "";
+        opt.textContent = `${c.nombres || ""} — ${c.documento || ""}`.trim();
+        selClienteCatalogo.appendChild(opt);
+      }
+      if (prev) {
+        selClienteCatalogo.value = prev;
+        aplicarRemitenteDesdeCliente(prev);
+      }
+    } catch (e) {
+      window.GlsAlert.showAlert(alertEl, {
+        type: "info",
+        message: `Catálogo de clientes no disponible: ${e?.message || String(e)}`
+      });
+    }
+  }
+
+  selClienteCatalogo?.addEventListener("change", () => {
+    aplicarRemitenteDesdeCliente(selClienteCatalogo.value);
+    scheduleQuotePreview();
+  });
 
   function setBusy(busy, text) {
     btnGuardar.disabled = busy;
@@ -258,6 +377,7 @@
         tarifaPorKm: fd.get("cot_tarifaKm"),
         seguroPorcentaje: fd.get("cot_seguroPct")
       },
+      clienteDocumento: fd.get("cliente_documento_catalogo"),
       observacion: fd.get("observacion"),
       remitente: {
         nombres: fd.get("r_nombres"),
@@ -317,12 +437,21 @@
     const cotRows =
       ce && d
         ? `
-      <tr><td colspan="2"><b>Cotización estimada</b> <span class="muted">(referencia interna)</span></td></tr>
+      <tr><td colspan="2"><b>Cotización</b></td></tr>
       <tr><td>Total estimado</td><td><b>${esc(String(d.totalEstimado))} ${esc(ce.moneda || "")}</b></td></tr>
       <tr><td>Subtotal</td><td>${esc(String(d.subtotal))} ${esc(ce.moneda || "")}</td></tr>
       <tr><td>Seguro</td><td>${esc(String(d.seguroMonto))} (${esc(String(d.seguroPorcentaje))}%)</td></tr>
     `
         : `<tr><td colspan="2" class="muted">Sin cotización calculada al registrar.</td></tr>`;
+
+    const estadoInicial = esc(e.estadoActual || "Registrado");
+    const fechaReg = esc(e.fechaRegistro || "");
+    const cliSnap =
+      e.clienteAsociado && (e.clienteAsociado.nombres || e.clienteAsociado.documento)
+        ? `<tr><td>Cliente catálogo</td><td>${esc(e.clienteAsociado.nombres || "")} · ${esc(
+            e.clienteAsociado.documento || ""
+          )}</td></tr>`
+        : "";
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Comprobante ${esc(codigo)}</title>
 <style>
@@ -337,20 +466,29 @@
   @media print{@page{margin:12mm}}
 </style></head><body>
   <h1>GRUPO LOGÍSTICO SALAZAR S.A.C.</h1>
-  <div class="sub">Comprobante de registro de envío · referencia operativa (no fiscal)</div>
+  <div class="sub">Comprobante de registro de envío</div>
   <table>
     <tr><td>Código</td><td><b>${esc(codigo)}</b></td></tr>
+    <tr><td>Estado inicial</td><td><b>${estadoInicial}</b></td></tr>
+    ${fechaReg ? `<tr><td>Fecha de registro</td><td><span class="mono">${fechaReg}</span></td></tr>` : ""}
     <tr><td>Origen → Destino</td><td>${esc(e.origen || "—")} → ${esc(e.destino || "—")}</td></tr>
-    <tr><td>Remitente</td><td>${esc(e.remitente?.nombres || "")} · ${esc(e.remitente?.documento || "")}</td></tr>
-    <tr><td>Destinatario</td><td>${esc(e.destinatario?.nombres || "")} · ${esc(e.destinatario?.documento || "")}</td></tr>
+    <tr><td>Remitente</td><td>${esc(e.remitente?.nombres || "")} · ${esc(e.remitente?.documento || "")}<br/><span style="color:#666;font-size:12px">${esc(
+      e.remitente?.telefono || ""
+    )} · ${esc(e.remitente?.direccion || "")}</span></td></tr>
+    <tr><td>Destinatario</td><td>${esc(e.destinatario?.nombres || "")} · ${esc(e.destinatario?.documento || "")}<br/><span style="color:#666;font-size:12px">${esc(
+      e.destinatario?.telefono || ""
+    )} · ${esc(e.destinatario?.direccion || "")}</span></td></tr>
+    ${cliSnap}
     <tr><td>Carga</td><td>${esc(e.tipoCarga || "")} — ${esc(e.descripcion || "")}</td></tr>
     <tr><td>Peso</td><td>${esc(String(e.peso ?? ""))} kg</td></tr>
     ${cotRows}
   </table>
   ${
     imgSrc
-      ? `<div class="qr"><img src="${esc(imgSrc)}" alt="QR" crossorigin="anonymous" /></div>`
-      : ""
+      ? `<div class="qr"><div style="font-size:12px;color:#555;margin-bottom:6px">Código QR (seguimiento)</div><img src="${esc(
+          imgSrc
+        )}" alt="QR" crossorigin="anonymous" /></div>`
+      : `<div class="muted" style="margin-top:12px">QR no disponible para vista previa de impresión.</div>`
   }
 </body></html>`;
 
@@ -497,7 +635,7 @@
   form.addEventListener("input", scheduleQuotePreview);
   form.addEventListener("change", scheduleQuotePreview);
 
-  applyDefaultsFromConfig().then(() => scheduleQuotePreview());
+  cargarCatalogoClientes().then(() => applyDefaultsFromConfig().then(() => scheduleQuotePreview()));
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -525,23 +663,33 @@
       }
 
       const codigo = res.codigoEnvio;
+      const clienteDocElegido = String(fd.get("cliente_documento_catalogo") || "").trim();
       const imgSrc = `../assets/qr/${encodeURIComponent(codigo)}.png?ts=${Date.now()}`;
       const cot = await window.glsApi.envios.obtenerPorCodigo(codigo);
       const total =
         cot?.ok && cot.envio?.cotizacionEstimada?.desglose?.totalEstimado != null
           ? `${cot.envio.cotizacionEstimada.desglose.totalEstimado} ${cot.envio.cotizacionEstimada.moneda || ""}`.trim()
           : null;
+      const clienteNoResuelto =
+        Boolean(clienteDocElegido) && cot?.ok && !cot.envio?.clienteAsociado;
 
       window.GlsAlert.showAlert(alertEl, { type: "success", message: `Envío registrado: ${codigo}` });
+      const qSeg = encodeURIComponent(codigo);
       const overlay = window.GlsModal.openModal({
         title: "Envío registrado",
         bodyHtml: `
           <div class="grid">
             <div class="badge ok">Código: <span class="mono">${escapeHtml(codigo)}</span></div>
+            <div class="badge ok">Estado inicial: <b>Registrado</b></div>
             ${
               total
                 ? `<div class="badge info">Total estimado: <b>${escapeHtml(total)}</b></div>`
                 : `<div class="muted">Cotización: no calculada (vacía o sin tarifas).</div>`
+            }
+            ${
+              clienteNoResuelto
+                ? `<div class="hint" style="color:var(--warn, #b45309)"><b>Catálogo:</b> no hay cliente vigente para el documento elegido; el envío quedó <b>sin</b> asociación a empresa.</div>`
+                : ""
             }
             <div class="card" style="display:grid; place-items:center">
               <img src="${imgSrc}" alt="QR" style="width:260px; height:260px; image-rendering:auto" />
@@ -549,8 +697,8 @@
             </div>
             <div class="actions" style="gap:10px; flex-wrap:wrap">
               <button type="button" class="btn btn-accent" id="btnPrintComprobante">Imprimir comprobante</button>
-              <a class="btn btn-primary" href="./seguimiento-envio.html">Ver trazabilidad</a>
-              <a class="btn" href="./geolocalizacion-qr.html">Geolocalización + QR</a>
+              <a class="btn btn-primary" href="./seguimiento-envio.html?codigo=${qSeg}">Ver trazabilidad</a>
+              <a class="btn" href="./geolocalizacion-qr.html?codigo=${qSeg}">Geolocalización + QR</a>
             </div>
           </div>
         `

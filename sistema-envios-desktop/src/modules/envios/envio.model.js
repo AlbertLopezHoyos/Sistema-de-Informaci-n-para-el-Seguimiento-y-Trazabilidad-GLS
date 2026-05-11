@@ -63,6 +63,10 @@ function buildEnvioDraft(input) {
   const destinatario = input?.destinatario || {};
   const dimensiones = buildDimensiones(input?.dimensiones || input);
   const cotizacion = buildCotizacionInput(input);
+  const clienteRaw = optionalString(
+    input?.clienteDocumento || input?.cliente_documento || input?.cliente_documento_catalogo
+  );
+  const clienteDocumentoAsociado = clienteRaw || undefined;
 
   return {
     remitente: {
@@ -84,7 +88,8 @@ function buildEnvioDraft(input) {
     peso: requiredNumber(input?.peso, "peso"),
     dimensiones,
     cotizacion,
-    observacion: optionalString(input?.observacion)
+    observacion: optionalString(input?.observacion),
+    clienteDocumentoAsociado
   };
 }
 

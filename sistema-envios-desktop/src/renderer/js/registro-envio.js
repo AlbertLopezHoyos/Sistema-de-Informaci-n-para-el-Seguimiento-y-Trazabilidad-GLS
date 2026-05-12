@@ -12,6 +12,9 @@
 
   function humanizarErrorFirestore(message) {
     const m = String(message || "");
+    if (/no tiene permisos para registrar envíos/i.test(m)) {
+      return "No tiene permisos para registrar envíos.";
+    }
     if (/permission|PERMISSION_DENIED|Missing or insufficient permissions/i.test(m)) {
       return "Sin permiso para guardar en Firestore. Revisa las reglas de seguridad del proyecto.";
     }
@@ -67,6 +70,11 @@
   }
 
   function validateRegistroForm(fd) {
+    return validateSoloTabCliente(fd) || validateSoloTabEnvio(fd);
+  }
+
+  /** Solo remitente y destinatario (tab Cliente); mismas reglas que las primeras filas de validateRegistroForm. */
+  function validateSoloTabCliente(fd) {
     const checks = [
       validateRequiredText(fd.get("r_nombres"), "Remitente · nombres completos"),
       validateDocumentoUi(fd.get("r_documento"), "Remitente · documento"),
@@ -75,7 +83,14 @@
       validateRequiredText(fd.get("d_nombres"), "Destinatario · nombres completos"),
       validateDocumentoUi(fd.get("d_documento"), "Destinatario · documento"),
       validateTelefonoUi(fd.get("d_telefono"), "Destinatario · teléfono"),
-      validateRequiredText(fd.get("d_direccion"), "Destinatario · dirección"),
+      validateRequiredText(fd.get("d_direccion"), "Destinatario · dirección")
+    ];
+    return checks.find(Boolean) || null;
+  }
+
+  /** Solo datos del envío y dimensiones (tab Datos del envío). */
+  function validateSoloTabEnvio(fd) {
+    const checks = [
       validateRequiredText(fd.get("origen"), "Envío · origen"),
       validateRequiredText(fd.get("destino"), "Envío · destino"),
       validateRequiredText(fd.get("tipoCarga"), "Envío · tipo de carga"),
@@ -86,6 +101,21 @@
       validatePositiveNumber(fd.get("dim_alto"), "Dimensiones · alto")
     ];
     return checks.find(Boolean) || null;
+  }
+
+  const MSG_PERMISO_REGISTRO = "No tiene permisos para registrar envíos.";
+  const MSG_BUSCAR_CLIENTE_OK = "Cliente encontrado y cargado correctamente.";
+  const MSG_BUSCAR_CLIENTE_NO = "No se encontró un cliente con ese documento. Puede registrar los datos manualmente.";
+  const MSG_TABS_BLOQUEADOS =
+    "Complete remitente y destinatario en el tab Cliente para continuar.";
+  const MSG_GUARDAR_REQUIERE_TABS =
+    "Complete el tab Cliente y el tab Datos del envío para habilitar Guardar envío. Cotización estimada y observaciones son opcionales.";
+
+  /** Roles autorizados para crear envíos (alineado con main: assertPuedeRegistrarEnvio). */
+  function puedeRegistrarEnvios(user) {
+    const rol = String(user?.rol || "").trim().toLowerCase();
+    if (!user || !rol) return false;
+    return rol === "admin" || rol === "operaciones";
   }
 
   const ICONS = {
@@ -128,178 +158,305 @@
         </div>
       </div>
       <div id="alert"></div>
+      <div id="bannerPermisoRegistro" class="alert alert-error registro-permiso-banner" style="display:none" role="status"></div>
 
-      <form id="formEnvio" class="grid" autocomplete="off">
-        <section class="form-section">
-          <div class="section-head">
-            <h3 class="title">Cliente (catálogo)</h3>
-            <span class="section-chip">Empresa</span>
+      <form id="formEnvio" class="registro-form-wrap" autocomplete="off">
+        <div class="form-section registro-tabs-shell">
+          <div class="registro-tablist" role="tablist" aria-label="Secciones del registro">
+            <button type="button" class="registro-tab is-active" role="tab" id="tabBtnCliente" aria-selected="true" aria-controls="tabPanelCliente">Cliente</button>
+            <button type="button" class="registro-tab" role="tab" id="tabBtnEnvio" aria-selected="false" aria-controls="tabPanelEnvio" disabled aria-disabled="true">Datos del envío</button>
+            <button type="button" class="registro-tab" role="tab" id="tabBtnCotizacion" aria-selected="false" aria-controls="tabPanelCotizacion" disabled aria-disabled="true">Cotización estimada</button>
+            <button type="button" class="registro-tab" role="tab" id="tabBtnObservaciones" aria-selected="false" aria-controls="tabPanelObservaciones" disabled aria-disabled="true">Observaciones</button>
           </div>
-          <div class="form-row grid grid-2" style="align-items:end">
-            <div class="field">
-              <label>Seleccionar cliente registrado</label>
-              <select id="selClienteCatalogo" name="cliente_documento_catalogo">
-                <option value="">Sin asociación a catálogo</option>
-              </select>
-            </div>
-            <div class="actions" style="align-self:end">
-              <a class="btn btn-icon" href="./clientes.html">Gestionar clientes</a>
+          <p class="hint registro-tabs-hint" id="registroTabsHint"></p>
+
+          <div class="registro-tabpanel is-active" role="tabpanel" id="tabPanelCliente" aria-labelledby="tabBtnCliente">
+            <section class="form-section" style="box-shadow:none; border:none; padding:0; margin:0">
+              <div class="section-head">
+                <h3 class="title">Cliente (catálogo)</h3>
+                <span class="section-chip">Empresa</span>
+              </div>
+              <div class="form-row grid grid-2" style="align-items:end">
+                <div class="field">
+                  <label>Seleccionar cliente registrado</label>
+                  <select id="selClienteCatalogo" name="cliente_documento_catalogo">
+                    <option value="">Sin asociación a catálogo</option>
+                  </select>
+                </div>
+                <div class="actions" style="align-self:end">
+                  <a class="btn btn-icon" href="./clientes.html">Gestionar clientes</a>
+                </div>
+              </div>
+              <div class="hint">Si eliges un cliente del catálogo, se completarán los datos del remitente cuando sea posible y el envío quedará enlazado al catálogo.</div>
+              <div class="form-row grid grid-2 registro-buscar-cliente" style="align-items:end; margin-top:14px">
+                <div class="field">
+                  <label>Buscar cliente por documento (DNI / RUC)</label>
+                  <input type="text" id="inpBuscarDocCliente" placeholder="Ej. 20100070991" maxlength="20" autocomplete="off" />
+                </div>
+                <div class="actions" style="align-self:end">
+                  <button type="button" class="btn btn-accent" id="btnBuscarClienteDoc">Buscar cliente</button>
+                </div>
+              </div>
+              <p class="hint" id="hintBuscarCliente" style="margin-top:6px"></p>
+            </section>
+
+            <div class="grid grid-2" style="margin-top:12px">
+              <section class="form-section" style="box-shadow:none; border:none; padding:0; margin:0">
+                <div class="section-head">
+                  <h3 class="title">Datos del remitente</h3>
+                  <span class="section-chip"><span class="ico">${ICONS.user}</span> Remitente</span>
+                </div>
+                <div class="form-row grid grid-2">
+                  <div class="field"><label>Nombres completos</label><input name="r_nombres" placeholder="Juan Pérez" required /></div>
+                  <div class="field"><label>Documento</label><input name="r_documento" placeholder="45678912" required /></div>
+                </div>
+                <div class="form-row grid grid-2" style="margin-top:10px">
+                  <div class="field"><label>Teléfono</label><input name="r_telefono" placeholder="999888777" required /></div>
+                  <div class="field"><label>Dirección</label><input name="r_direccion" placeholder="Los Olivos, Lima" required /></div>
+                </div>
+              </section>
+
+              <section class="form-section" style="box-shadow:none; border:none; padding:0; margin:0">
+                <div class="section-head">
+                  <h3 class="title">Datos del destinatario</h3>
+                  <span class="section-chip"><span class="ico">${ICONS.user}</span> Destinatario</span>
+                </div>
+                <div class="form-row grid grid-2">
+                  <div class="field"><label>Nombres completos</label><input name="d_nombres" placeholder="María López" required /></div>
+                  <div class="field"><label>Documento</label><input name="d_documento" placeholder="76543210" required /></div>
+                </div>
+                <div class="form-row grid grid-2" style="margin-top:10px">
+                  <div class="field"><label>Teléfono</label><input name="d_telefono" placeholder="988777666" required /></div>
+                  <div class="field"><label>Dirección</label><input name="d_direccion" placeholder="Trujillo, La Libertad" required /></div>
+                </div>
+              </section>
             </div>
           </div>
-          <div class="hint">Si eliges un cliente del catálogo, se completarán los datos del remitente cuando sea posible y el envío quedará enlazado al catálogo.</div>
-        </section>
 
-        <div class="grid grid-2">
-          <section class="form-section">
-            <div class="section-head">
-              <h3 class="title">Datos del remitente</h3>
-              <span class="section-chip"><span class="ico">${ICONS.user}</span> Remitente</span>
-            </div>
-            <div class="form-row grid grid-2">
-              <div class="field"><label>Nombres completos</label><input name="r_nombres" placeholder="Juan Pérez" required /></div>
-              <div class="field"><label>Documento</label><input name="r_documento" placeholder="45678912" required /></div>
-            </div>
-            <div class="form-row grid grid-2" style="margin-top:10px">
-              <div class="field"><label>Teléfono</label><input name="r_telefono" placeholder="999888777" required /></div>
-              <div class="field"><label>Dirección</label><input name="r_direccion" placeholder="Los Olivos, Lima" required /></div>
-            </div>
-          </section>
+          <div class="registro-tabpanel" role="tabpanel" id="tabPanelEnvio" aria-labelledby="tabBtnEnvio" hidden>
+            <section class="form-section" style="box-shadow:none; border:none; padding:0; margin:0">
+              <div class="section-head">
+                <h3 class="title">Datos del envío</h3>
+                <span class="section-chip"><span class="ico">${ICONS.box}</span> Envío</span>
+              </div>
+              <div class="form-row grid grid-3">
+                <div class="field"><label>Origen</label><input name="origen" placeholder="Lima" required /></div>
+                <div class="field"><label>Destino</label><input name="destino" placeholder="Trujillo" required /></div>
+                <div class="field"><label>Tipo de carga</label><input name="tipoCarga" placeholder="Paquete / Documentos" required /></div>
+              </div>
+              <div class="form-row grid grid-2" style="margin-top:10px">
+                <div class="field"><label>Descripción</label><input name="descripcion" placeholder="Caja mediana / muebles varios" required /></div>
+                <div class="field"><label>Peso (kg)</label><input name="peso" type="number" step="0.01" placeholder="12.5" required /></div>
+              </div>
+              <div class="hint" style="margin-top:8px">Dimensiones de la carga (mudanzas / voluminosos)</div>
+              <div class="form-row grid grid-4" style="margin-top:10px">
+                <div class="field"><label>Largo</label><input name="dim_largo" type="number" step="0.01" min="0.01" placeholder="120" required /></div>
+                <div class="field"><label>Ancho</label><input name="dim_ancho" type="number" step="0.01" min="0.01" placeholder="80" required /></div>
+                <div class="field"><label>Alto</label><input name="dim_alto" type="number" step="0.01" min="0.01" placeholder="90" required /></div>
+                <div class="field"><label>Unidad</label>
+                  <select name="dim_unidad" required>
+                    <option value="cm" selected>cm</option>
+                    <option value="m">m</option>
+                    <option value="pulgadas">pulgadas</option>
+                  </select>
+                </div>
+              </div>
+            </section>
+          </div>
 
-          <section class="form-section">
-            <div class="section-head">
-              <h3 class="title">Datos del destinatario</h3>
-              <span class="section-chip"><span class="ico">${ICONS.user}</span> Destinatario</span>
-            </div>
-            <div class="form-row grid grid-2">
-              <div class="field"><label>Nombres completos</label><input name="d_nombres" placeholder="María López" required /></div>
-              <div class="field"><label>Documento</label><input name="d_documento" placeholder="76543210" required /></div>
-            </div>
-            <div class="form-row grid grid-2" style="margin-top:10px">
-              <div class="field"><label>Teléfono</label><input name="d_telefono" placeholder="988777666" required /></div>
-              <div class="field"><label>Dirección</label><input name="d_direccion" placeholder="Trujillo, La Libertad" required /></div>
-            </div>
-          </section>
+          <div class="registro-tabpanel" role="tabpanel" id="tabPanelCotizacion" aria-labelledby="tabBtnCotizacion" hidden>
+            <section class="form-section" style="box-shadow:none; border:none; padding:0; margin:0">
+              <div class="section-head">
+                <h3 class="title">Cotización estimada</h3>
+                <span class="section-chip">Opcional</span>
+              </div>
+              <div class="card-subtitle" style="margin-top:-6px">
+                Si completa tarifas o distancia, verá un monto referencial (no es comprobante fiscal). Puede registrar el envío sin cotización; en ese caso no se guardará total estimado.
+              </div>
+
+              <div class="form-row grid grid-3">
+                <div class="field">
+                  <label>Moneda</label>
+                  <select name="cot_moneda">
+                    <option value="PEN" selected>PEN (S/)</option>
+                    <option value="USD">USD</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Distancia aprox. (km)</label>
+                  <input name="cot_distanciaKm" type="number" step="0.1" min="0" placeholder="Ej. 560" />
+                </div>
+                <div class="field">
+                  <label>Seguro (%)</label>
+                  <input name="cot_seguroPct" type="number" step="0.1" min="0" max="100" placeholder="0" />
+                </div>
+              </div>
+
+              <div class="form-row grid grid-3" style="margin-top:10px">
+                <div class="field">
+                  <label>Tarifa por kg</label>
+                  <input name="cot_tarifaKg" type="number" step="0.01" min="0" placeholder="Ej. 2.50" />
+                </div>
+                <div class="field">
+                  <label>Tarifa por m³</label>
+                  <input name="cot_tarifaM3" type="number" step="0.01" min="0" placeholder="Ej. 180" />
+                </div>
+                <div class="field">
+                  <label>Tarifa por km</label>
+                  <input name="cot_tarifaKm" type="number" step="0.01" min="0" placeholder="Ej. 1.20" />
+                </div>
+              </div>
+
+              <div class="card" style="margin-top:12px; box-shadow:none">
+                <div class="card-title">Vista previa</div>
+                <div id="cot_preview" class="muted">Ingresa peso, dimensiones y al menos una tarifa (o distancia + tarifa/km) para calcular.</div>
+              </div>
+            </section>
+          </div>
+
+          <div class="registro-tabpanel" role="tabpanel" id="tabPanelObservaciones" aria-labelledby="tabBtnObservaciones" hidden>
+            <section class="form-section" style="box-shadow:none; border:none; padding:0; margin:0">
+              <div class="section-head">
+                <h3 class="title">Observaciones</h3>
+                <span class="section-chip"><span class="ico">${ICONS.note}</span> Opcional</span>
+              </div>
+              <div class="form-row">
+                <div class="field"><label>Observación</label><textarea name="observacion" placeholder="Sin observaciones"></textarea></div>
+                <p class="muted" style="margin-top:8px;font-size:12px">Al guardar se asigna el estado <b>Registrado</b>, se registra el historial y se genera el código QR.</p>
+              </div>
+            </section>
+          </div>
         </div>
-
-        <section class="form-section">
-          <div class="section-head">
-            <h3 class="title">Datos del envío</h3>
-            <span class="section-chip"><span class="ico">${ICONS.box}</span> Envío</span>
-          </div>
-          <div class="form-row grid grid-3">
-            <div class="field"><label>Origen</label><input name="origen" placeholder="Lima" required /></div>
-            <div class="field"><label>Destino</label><input name="destino" placeholder="Trujillo" required /></div>
-            <div class="field"><label>Tipo de carga</label><input name="tipoCarga" placeholder="Paquete / Documentos" required /></div>
-          </div>
-          <div class="form-row grid grid-2" style="margin-top:10px">
-            <div class="field"><label>Descripción</label><input name="descripcion" placeholder="Caja mediana / muebles varios" required /></div>
-            <div class="field"><label>Peso (kg)</label><input name="peso" type="number" step="0.01" placeholder="12.5" required /></div>
-          </div>
-          <div class="hint" style="margin-top:8px">Dimensiones de la carga (mudanzas / voluminosos)</div>
-          <div class="form-row grid grid-4" style="margin-top:10px">
-            <div class="field"><label>Largo</label><input name="dim_largo" type="number" step="0.01" min="0.01" placeholder="120" required /></div>
-            <div class="field"><label>Ancho</label><input name="dim_ancho" type="number" step="0.01" min="0.01" placeholder="80" required /></div>
-            <div class="field"><label>Alto</label><input name="dim_alto" type="number" step="0.01" min="0.01" placeholder="90" required /></div>
-            <div class="field"><label>Unidad</label>
-              <select name="dim_unidad" required>
-                <option value="cm" selected>cm</option>
-                <option value="m">m</option>
-                <option value="pulgadas">pulgadas</option>
-              </select>
-            </div>
-          </div>
-        </section>
-
-        <section class="form-section">
-          <div class="section-head">
-            <h3 class="title">Cotización estimada</h3>
-            <span class="section-chip">Opcional</span>
-          </div>
-          <div class="card-subtitle" style="margin-top:-6px">
-            Completa tarifas internas para obtener un monto referencial (no es comprobante fiscal). Si no llenas tarifas, no se guarda cotización.
-          </div>
-
-          <div class="form-row grid grid-3">
-            <div class="field">
-              <label>Moneda</label>
-              <select name="cot_moneda">
-                <option value="PEN" selected>PEN (S/)</option>
-                <option value="USD">USD</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>Distancia aprox. (km)</label>
-              <input name="cot_distanciaKm" type="number" step="0.1" min="0" placeholder="Ej. 560" />
-            </div>
-            <div class="field">
-              <label>Seguro (%)</label>
-              <input name="cot_seguroPct" type="number" step="0.1" min="0" max="100" placeholder="0" />
-            </div>
-          </div>
-
-          <div class="form-row grid grid-3" style="margin-top:10px">
-            <div class="field">
-              <label>Tarifa por kg</label>
-              <input name="cot_tarifaKg" type="number" step="0.01" min="0" placeholder="Ej. 2.50" />
-            </div>
-            <div class="field">
-              <label>Tarifa por m³</label>
-              <input name="cot_tarifaM3" type="number" step="0.01" min="0" placeholder="Ej. 180" />
-            </div>
-            <div class="field">
-              <label>Tarifa por km</label>
-              <input name="cot_tarifaKm" type="number" step="0.01" min="0" placeholder="Ej. 1.20" />
-            </div>
-          </div>
-
-          <div class="card" style="margin-top:12px; box-shadow:none">
-            <div class="card-title">Vista previa</div>
-            <div id="cot_preview" class="muted">Ingresa peso, dimensiones y al menos una tarifa (o distancia + tarifa/km) para calcular.</div>
-          </div>
-        </section>
-
-        <section class="form-section">
-          <div class="section-head">
-            <h3 class="title">Observaciones</h3>
-            <span class="section-chip"><span class="ico">${ICONS.note}</span> Nota</span>
-          </div>
-          <div class="form-row">
-            <div class="field"><label>Observación (opcional)</label><textarea name="observacion" placeholder="Sin observaciones"></textarea></div>
-            <div class="hint">Al guardar, el sistema asigna estado inicial <b>Registrado</b>, crea el historial y genera el QR.</div>
-          </div>
-        </section>
 
         <section class="form-section">
           <div class="form-footer">
             <div class="actions">
-              <button class="btn btn-primary btn-icon" type="submit" id="btnGuardar"><span class="ico">${ICONS.send}</span>Guardar envío</button>
-              <button class="btn" type="button" id="btnLimpiar">Limpiar</button>
+              <button class="btn btn-primary btn-icon" type="submit" id="btnGuardar" hidden disabled aria-hidden="true"><span class="ico">${ICONS.send}</span>Guardar envío</button>
+              <button class="btn" type="button" id="btnLimpiarFormulario">Limpiar formulario</button>
             </div>
             <span class="muted" id="status"></span>
           </div>
+          <p class="hint" id="hintGuardarEnvio" style="margin-top:10px"></p>
         </section>
       </form>
       </div>
     </main>
   `;
 
-  window.GlsAuthGuard?.requireAuthOrRedirect?.().then(() => window.GlsMenu?.mountAuthMenu?.());
-
   const alertEl = document.getElementById("alert");
   const form = document.getElementById("formEnvio");
   const statusEl = document.getElementById("status");
+  const hintGuardarEnvio = document.getElementById("hintGuardarEnvio");
   const btnGuardar = document.getElementById("btnGuardar");
-  const btnLimpiar = document.getElementById("btnLimpiar");
+  const bannerPermiso = document.getElementById("bannerPermisoRegistro");
+  const btnLimpiarFormulario = document.getElementById("btnLimpiarFormulario");
+  const inpBuscarDocCliente = document.getElementById("inpBuscarDocCliente");
+  const btnBuscarClienteDoc = document.getElementById("btnBuscarClienteDoc");
+  const hintBuscarCliente = document.getElementById("hintBuscarCliente");
   const cotPreviewEl = document.getElementById("cot_preview");
   const selClienteCatalogo = document.getElementById("selClienteCatalogo");
   /** @type {Map<string, { nombres?: string, documento?: string, telefono?: string, direccion?: string }>} */
   const catalogoClientesPorDocumento = new Map();
 
-  function aplicarRemitenteDesdeCliente(docKey) {
-    const k = String(docKey || "").trim();
-    if (!k) return;
-    const c = catalogoClientesPorDocumento.get(k);
-    if (!c) return;
+  const tabKeys = ["cliente", "envio", "cotizacion", "observaciones"];
+  const tabBtns = {
+    cliente: document.getElementById("tabBtnCliente"),
+    envio: document.getElementById("tabBtnEnvio"),
+    cotizacion: document.getElementById("tabBtnCotizacion"),
+    observaciones: document.getElementById("tabBtnObservaciones")
+  };
+  const tabPanels = {
+    cliente: document.getElementById("tabPanelCliente"),
+    envio: document.getElementById("tabPanelEnvio"),
+    cotizacion: document.getElementById("tabPanelCotizacion"),
+    observaciones: document.getElementById("tabPanelObservaciones")
+  };
+  const tabsHint = document.getElementById("registroTabsHint");
+  let tabActiva = "cliente";
+
+  function clienteTabCompleto() {
+    return !validateSoloTabCliente(new FormData(form));
+  }
+
+  function selectTab(id, opts = {}) {
+    const silent = opts.silent === true;
+    if (id !== "cliente" && !clienteTabCompleto()) {
+      if (!silent) {
+        window.GlsAlert.showAlert(alertEl, { type: "info", message: MSG_TABS_BLOQUEADOS });
+      }
+      id = "cliente";
+    }
+    if (!tabKeys.includes(id)) id = "cliente";
+    tabActiva = id;
+    for (const k of tabKeys) {
+      const btn = tabBtns[k];
+      const pan = tabPanels[k];
+      const sel = k === id;
+      if (btn) {
+        btn.setAttribute("aria-selected", sel ? "true" : "false");
+        btn.classList.toggle("is-active", sel);
+      }
+      if (pan) {
+        pan.toggleAttribute("hidden", !sel);
+        pan.classList.toggle("is-active", sel);
+      }
+    }
+  }
+
+  function updateClienteTabGate() {
+    const ok = clienteTabCompleto();
+    for (const k of ["envio", "cotizacion", "observaciones"]) {
+      const b = tabBtns[k];
+      if (!b) continue;
+      b.disabled = !ok;
+      b.setAttribute("aria-disabled", ok ? "false" : "true");
+      b.classList.toggle("is-disabled", !ok);
+    }
+    if (tabsHint) tabsHint.textContent = ok ? "" : MSG_TABS_BLOQUEADOS;
+    if (!ok && tabActiva !== "cliente") selectTab("cliente", { silent: true });
+    refreshEstadoGuardarBoton();
+  }
+
+  function focusTabForValidationError(msg) {
+    const m = String(msg || "");
+    if (/Remitente|Destinatario/i.test(m)) selectTab("cliente", { silent: true });
+    else if (/observación/i.test(m)) selectTab("observaciones", { silent: true });
+    else selectTab("envio", { silent: true });
+  }
+
+  for (const k of tabKeys) {
+    tabBtns[k]?.addEventListener("click", () => selectTab(k));
+  }
+
+  let sessionUser = null;
+  let puedeRegistrar = false;
+  let registroSubmitEnCurso = false;
+  /** Última cotización calculada en vista previa (resumen antes de guardar). */
+  let lastPreviewCotizacion = null;
+
+  /** Misma condición que un envío válido para confirmar: Cliente + Datos del envío (cotización y observaciones opcionales). */
+  function datosListosParaMostrarGuardar(fd) {
+    return !validateRegistroForm(fd);
+  }
+
+  function refreshEstadoGuardarBoton() {
+    if (!btnGuardar) return;
+    const fd = new FormData(form);
+    const listo = datosListosParaMostrarGuardar(fd);
+    const mostrar = Boolean(listo && puedeRegistrar);
+    btnGuardar.hidden = !mostrar;
+    btnGuardar.setAttribute("aria-hidden", mostrar ? "false" : "true");
+    btnGuardar.disabled = registroSubmitEnCurso || !mostrar;
+    if (hintGuardarEnvio) {
+      hintGuardarEnvio.textContent = mostrar || !puedeRegistrar ? "" : MSG_GUARDAR_REQUIERE_TABS;
+    }
+  }
+
+  function aplicarRemitenteDesdeObjetoCliente(c) {
+    if (!c) {
+      updateClienteTabGate();
+      return;
+    }
     const setVal = (name, val) => {
       const el = form.querySelector(`[name="${name}"]`);
       if (el && val != null && String(val).trim() !== "") el.value = String(val).trim();
@@ -309,6 +466,14 @@
     setVal("r_telefono", c.telefono);
     setVal("r_direccion", c.direccion);
     window.GlsAlert.clearAlert(alertEl);
+    updateClienteTabGate();
+  }
+
+  function aplicarRemitenteDesdeCliente(docKey) {
+    const k = String(docKey || "").trim();
+    if (!k) return;
+    const c = catalogoClientesPorDocumento.get(k);
+    aplicarRemitenteDesdeObjetoCliente(c);
   }
 
   async function cargarCatalogoClientes() {
@@ -322,6 +487,7 @@
           type: "info",
           message: r?.error ? `Catálogo de clientes no disponible: ${r.error}` : "Catálogo de clientes no disponible."
         });
+        updateClienteTabGate();
         return;
       }
       catalogoClientesPorDocumento.clear();
@@ -337,23 +503,81 @@
         selClienteCatalogo.value = prev;
         aplicarRemitenteDesdeCliente(prev);
       }
+      updateClienteTabGate();
     } catch (e) {
       window.GlsAlert.showAlert(alertEl, {
         type: "info",
         message: `Catálogo de clientes no disponible: ${e?.message || String(e)}`
       });
+      updateClienteTabGate();
     }
   }
 
   selClienteCatalogo?.addEventListener("change", () => {
     aplicarRemitenteDesdeCliente(selClienteCatalogo.value);
     scheduleQuotePreview();
+    updateClienteTabGate();
   });
 
   function setBusy(busy, text) {
-    btnGuardar.disabled = busy;
-    btnLimpiar.disabled = busy;
+    registroSubmitEnCurso = busy;
+    btnLimpiarFormulario.disabled = busy;
+    btnBuscarClienteDoc.disabled = busy;
     statusEl.textContent = text || "";
+    refreshEstadoGuardarBoton();
+  }
+
+  /** True si el usuario escribió algo en el formulario (para confirmar limpieza). */
+  function formularioTieneDatos() {
+    const fd = new FormData(form);
+    const keys = [
+      "r_nombres",
+      "r_documento",
+      "r_telefono",
+      "r_direccion",
+      "d_nombres",
+      "d_documento",
+      "d_telefono",
+      "d_direccion",
+      "origen",
+      "destino",
+      "tipoCarga",
+      "descripcion",
+      "peso",
+      "dim_largo",
+      "dim_ancho",
+      "dim_alto",
+      "observacion",
+      "cot_distanciaKm",
+      "cot_seguroPct",
+      "cot_tarifaKg",
+      "cot_tarifaM3",
+      "cot_tarifaKm"
+    ];
+    for (const k of keys) {
+      if (String(fd.get(k) || "").trim()) return true;
+    }
+    if (String(fd.get("cliente_documento_catalogo") || "").trim()) return true;
+    if (String(inpBuscarDocCliente?.value || "").trim()) return true;
+    return false;
+  }
+
+  /** Limpia el formulario y la vista previa de cotización (no toca Firestore). */
+  async function limpiarFormularioCompleto() {
+    form.reset();
+    if (selClienteCatalogo) selClienteCatalogo.value = "";
+    if (inpBuscarDocCliente) inpBuscarDocCliente.value = "";
+    if (hintBuscarCliente) hintBuscarCliente.textContent = "";
+    lastPreviewCotizacion = null;
+    cotPreviewEl.className = "muted";
+    cotPreviewEl.textContent =
+      "Ingresa peso, dimensiones y al menos una tarifa (o distancia + tarifa/km) para calcular.";
+    window.GlsAlert.clearAlert(alertEl);
+    statusEl.textContent = "";
+    await applyDefaultsFromConfig();
+    scheduleQuotePreview();
+    selectTab("cliente", { silent: true });
+    updateClienteTabGate();
   }
 
   function payloadFromForm(fd) {
@@ -420,11 +644,122 @@
     }
   }
 
-  function printComprobante({ codigo, envio, imgSrc }) {
+  /**
+   * HTML del comprobante (impresión y referencia visual). Colores corporativos GLS.
+   */
+  function buildComprobanteHtmlDocument({ codigo, envio, imgSrc }) {
     const esc = escapeHtml;
     const e = envio || {};
     const ce = e.cotizacionEstimada;
     const d = ce?.desglose;
+    const dim = e.dimensiones || {};
+    const dimTxt = `${esc(String(dim.largo ?? "—"))} × ${esc(String(dim.ancho ?? "—"))} × ${esc(String(dim.alto ?? "—"))} ${esc(dim.unidadMedida || "")}`.trim();
+
+    const cotBlock =
+      ce && d
+        ? `
+        <div class="cmp-section">
+          <div class="cmp-section-title">Cotización estimada</div>
+          <table class="cmp-table">
+            <tr><td>Total estimado</td><td><strong>${esc(String(d.totalEstimado))} ${esc(ce.moneda || "")}</strong></td></tr>
+            <tr><td>Subtotal</td><td>${esc(String(d.subtotal))} ${esc(ce.moneda || "")}</td></tr>
+            <tr><td>Seguro</td><td>${esc(String(d.seguroMonto))} (${esc(String(d.seguroPorcentaje))}%)</td></tr>
+          </table>
+        </div>`
+        : `
+        <div class="cmp-section">
+          <div class="cmp-section-title">Cotización estimada</div>
+          <p class="cmp-muted">Sin cotización calculada al registrar.</p>
+        </div>`;
+
+    const cliBlock =
+      e.clienteAsociado && (e.clienteAsociado.nombres || e.clienteAsociado.documento)
+        ? `
+        <div class="cmp-section">
+          <div class="cmp-section-title">Cliente catálogo</div>
+          <p>${esc(e.clienteAsociado.nombres || "")} · <span class="mono">${esc(e.clienteAsociado.documento || "")}</span></p>
+        </div>`
+        : "";
+
+    const qrBlock = imgSrc
+      ? `<div class="cmp-section cmp-qr"><div class="cmp-section-title">Código QR</div><img src="${esc(imgSrc)}" alt="QR" crossorigin="anonymous" /></div>`
+      : `<div class="cmp-section"><div class="cmp-muted">QR no disponible.</div></div>`;
+
+    return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Comprobante ${esc(codigo)}</title>
+<style>
+  :root { --cmp-primary:#1a365d; --cmp-accent:#c05621; --cmp-border:#e2e8f0; --cmp-muted:#64748b; }
+  *{box-sizing:border-box}
+  body{font-family:'Segoe UI',system-ui,sans-serif;margin:0;padding:0;background:#f8fafc;color:#0f172a}
+  .cmp-wrap{max-width:720px;margin:0 auto;padding:28px 24px 40px;background:#fff;min-height:100vh}
+  .cmp-top{border-bottom:4px solid var(--cmp-accent);padding-bottom:16px;margin-bottom:20px}
+  .cmp-brand{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--cmp-muted);font-weight:700}
+  .cmp-empresa{font-size:20px;font-weight:800;color:var(--cmp-primary);margin:6px 0 2px}
+  .cmp-doc-title{font-size:15px;color:var(--cmp-accent);font-weight:800}
+  .cmp-code{font-size:22px;font-weight:900;color:var(--cmp-primary);letter-spacing:.04em;margin:18px 0 4px}
+  .cmp-meta{font-size:13px;color:var(--cmp-muted)}
+  .cmp-section{border:1px solid var(--cmp-border);border-radius:12px;padding:14px 16px;margin-top:14px;background:#fff}
+  .cmp-section-title{font-size:12px;font-weight:800;color:var(--cmp-primary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;border-bottom:1px solid var(--cmp-border);padding-bottom:6px}
+  .cmp-table{width:100%;border-collapse:collapse;font-size:13px}
+  .cmp-table td{padding:8px 0;border-bottom:1px solid var(--cmp-border);vertical-align:top}
+  .cmp-table td:first-child{width:38%;color:var(--cmp-muted);font-weight:600}
+  .cmp-muted{color:var(--cmp-muted);font-size:13px}
+  .cmp-qr{text-align:center}
+  .cmp-qr img{width:200px;height:200px}
+  .mono{font-family:ui-monospace,Menlo,monospace}
+  .cmp-footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--cmp-border);font-size:11px;color:var(--cmp-muted);text-align:center;line-height:1.5}
+  @media print{body{background:#fff}.cmp-wrap{max-width:none;padding:0}}
+</style></head><body>
+  <div class="cmp-wrap">
+    <header class="cmp-top">
+      <div class="cmp-brand">Grupo Logístico Salazar</div>
+      <div class="cmp-empresa">GRUPO LOGÍSTICO SALAZAR S.A.C.</div>
+      <div class="cmp-doc-title">Comprobante de Registro de Envío</div>
+    </header>
+    <div class="cmp-code mono">${esc(codigo)}</div>
+    <p class="cmp-meta"><strong>Estado inicial:</strong> ${esc(e.estadoActual || "Registrado")}
+      ${e.fechaRegistro ? ` · <strong>Fecha de registro:</strong> <span class="mono">${esc(e.fechaRegistro)}</span>` : ""}</p>
+
+    <div class="cmp-section">
+      <div class="cmp-section-title">Datos del remitente</div>
+      <table class="cmp-table">
+        <tr><td>Nombres</td><td>${esc(e.remitente?.nombres || "—")}</td></tr>
+        <tr><td>Documento</td><td class="mono">${esc(e.remitente?.documento || "—")}</td></tr>
+        <tr><td>Teléfono</td><td>${esc(e.remitente?.telefono || "—")}</td></tr>
+        <tr><td>Dirección</td><td>${esc(e.remitente?.direccion || "—")}</td></tr>
+      </table>
+    </div>
+
+    <div class="cmp-section">
+      <div class="cmp-section-title">Datos del destinatario</div>
+      <table class="cmp-table">
+        <tr><td>Nombres</td><td>${esc(e.destinatario?.nombres || "—")}</td></tr>
+        <tr><td>Documento</td><td class="mono">${esc(e.destinatario?.documento || "—")}</td></tr>
+        <tr><td>Teléfono</td><td>${esc(e.destinatario?.telefono || "—")}</td></tr>
+        <tr><td>Dirección</td><td>${esc(e.destinatario?.direccion || "—")}</td></tr>
+      </table>
+    </div>
+
+    <div class="cmp-section">
+      <div class="cmp-section-title">Datos del envío</div>
+      <table class="cmp-table">
+        <tr><td>Origen</td><td>${esc(e.origen || "—")}</td></tr>
+        <tr><td>Destino</td><td>${esc(e.destino || "—")}</td></tr>
+        <tr><td>Tipo de carga</td><td>${esc(e.tipoCarga || "—")}</td></tr>
+        <tr><td>Descripción</td><td>${esc(e.descripcion || "—")}</td></tr>
+        <tr><td>Peso</td><td><strong>${esc(String(e.peso ?? "—"))}</strong> kg</td></tr>
+        <tr><td>Dimensiones</td><td>${dimTxt}</td></tr>
+      </table>
+    </div>
+    ${cliBlock}
+    ${cotBlock}
+    ${qrBlock}
+    <footer class="cmp-footer">Documento generado por el Sistema de Información para el Seguimiento y Trazabilidad de Envíos.</footer>
+  </div>
+</body></html>`;
+  }
+
+  function printComprobante({ codigo, envio, imgSrc }) {
+    const html = buildComprobanteHtmlDocument({ codigo, envio, imgSrc });
     const w = window.open("", "_blank");
     if (!w) {
       window.GlsAlert.showAlert(alertEl, {
@@ -433,65 +768,6 @@
       });
       return;
     }
-
-    const cotRows =
-      ce && d
-        ? `
-      <tr><td colspan="2"><b>Cotización</b></td></tr>
-      <tr><td>Total estimado</td><td><b>${esc(String(d.totalEstimado))} ${esc(ce.moneda || "")}</b></td></tr>
-      <tr><td>Subtotal</td><td>${esc(String(d.subtotal))} ${esc(ce.moneda || "")}</td></tr>
-      <tr><td>Seguro</td><td>${esc(String(d.seguroMonto))} (${esc(String(d.seguroPorcentaje))}%)</td></tr>
-    `
-        : `<tr><td colspan="2" class="muted">Sin cotización calculada al registrar.</td></tr>`;
-
-    const estadoInicial = esc(e.estadoActual || "Registrado");
-    const fechaReg = esc(e.fechaRegistro || "");
-    const cliSnap =
-      e.clienteAsociado && (e.clienteAsociado.nombres || e.clienteAsociado.documento)
-        ? `<tr><td>Cliente catálogo</td><td>${esc(e.clienteAsociado.nombres || "")} · ${esc(
-            e.clienteAsociado.documento || ""
-          )}</td></tr>`
-        : "";
-
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Comprobante ${esc(codigo)}</title>
-<style>
-  body{font-family:Segoe UI,Arial,sans-serif;padding:22px;color:#222;max-width:720px;margin:0 auto}
-  h1{font-size:17px;margin:0 0 6px;color:#7A2828}
-  .sub{color:#666;font-size:12px;margin-bottom:14px}
-  table{width:100%;border-collapse:collapse;font-size:13px}
-  td{padding:7px 0;border-bottom:1px solid #eee;vertical-align:top}
-  td:first-child{width:38%;color:#555}
-  .qr{text-align:center;margin-top:14px}
-  .qr img{width:200px;height:200px}
-  @media print{@page{margin:12mm}}
-</style></head><body>
-  <h1>GRUPO LOGÍSTICO SALAZAR S.A.C.</h1>
-  <div class="sub">Comprobante de registro de envío</div>
-  <table>
-    <tr><td>Código</td><td><b>${esc(codigo)}</b></td></tr>
-    <tr><td>Estado inicial</td><td><b>${estadoInicial}</b></td></tr>
-    ${fechaReg ? `<tr><td>Fecha de registro</td><td><span class="mono">${fechaReg}</span></td></tr>` : ""}
-    <tr><td>Origen → Destino</td><td>${esc(e.origen || "—")} → ${esc(e.destino || "—")}</td></tr>
-    <tr><td>Remitente</td><td>${esc(e.remitente?.nombres || "")} · ${esc(e.remitente?.documento || "")}<br/><span style="color:#666;font-size:12px">${esc(
-      e.remitente?.telefono || ""
-    )} · ${esc(e.remitente?.direccion || "")}</span></td></tr>
-    <tr><td>Destinatario</td><td>${esc(e.destinatario?.nombres || "")} · ${esc(e.destinatario?.documento || "")}<br/><span style="color:#666;font-size:12px">${esc(
-      e.destinatario?.telefono || ""
-    )} · ${esc(e.destinatario?.direccion || "")}</span></td></tr>
-    ${cliSnap}
-    <tr><td>Carga</td><td>${esc(e.tipoCarga || "")} — ${esc(e.descripcion || "")}</td></tr>
-    <tr><td>Peso</td><td>${esc(String(e.peso ?? ""))} kg</td></tr>
-    ${cotRows}
-  </table>
-  ${
-    imgSrc
-      ? `<div class="qr"><div style="font-size:12px;color:#555;margin-bottom:6px">Código QR (seguimiento)</div><img src="${esc(
-          imgSrc
-        )}" alt="QR" crossorigin="anonymous" /></div>`
-      : `<div class="muted" style="margin-top:12px">QR no disponible para vista previa de impresión.</div>`
-  }
-</body></html>`;
-
     w.document.write(html);
     w.document.close();
     w.onload = () => {
@@ -538,6 +814,7 @@
       cotizacion.seguroPorcentaje > 0;
 
     if (!hasParams) {
+      lastPreviewCotizacion = null;
       cotPreviewEl.className = "muted";
       cotPreviewEl.textContent =
         "Ingresa peso, dimensiones y al menos una tarifa (o distancia + tarifa/km) para calcular.";
@@ -554,6 +831,7 @@
       !String(dh || "").trim() ||
       !String(pesoRaw || "").trim()
     ) {
+      lastPreviewCotizacion = null;
       cotPreviewEl.className = "muted";
       cotPreviewEl.textContent = "Completa peso y dimensiones para ver la cotización.";
       return;
@@ -581,24 +859,28 @@
     try {
       apiRes = await window.glsApi.envios.previewCotizacion(payload);
     } catch (err) {
+      lastPreviewCotizacion = null;
       cotPreviewEl.className = "muted";
       cotPreviewEl.textContent = humanizarErrorFirestore(err?.message || String(err));
       return;
     }
 
     if (!apiRes?.ok) {
+      lastPreviewCotizacion = null;
       cotPreviewEl.className = "muted";
       cotPreviewEl.textContent = apiRes?.error || "No se pudo calcular la vista previa.";
       return;
     }
 
     if (!apiRes.cotizacionEstimada) {
+      lastPreviewCotizacion = null;
       cotPreviewEl.className = "muted";
       cotPreviewEl.textContent = "Completa peso y dimensiones válidas para ver la vista previa.";
       return;
     }
 
     const est = apiRes.cotizacionEstimada;
+    lastPreviewCotizacion = est;
     const d = est.desglose;
     cotPreviewEl.className = "";
     cotPreviewEl.innerHTML = `
@@ -624,33 +906,40 @@
     `;
   }
 
-  btnLimpiar.addEventListener("click", async () => {
-    form.reset();
-    window.GlsAlert.clearAlert(alertEl);
-    statusEl.textContent = "";
-    await applyDefaultsFromConfig();
-    scheduleQuotePreview();
-  });
+  /** Resumen legible para el modal de confirmación antes de persistir en Firestore. */
+  function buildResumenConfirmacionHtml(fd, cotEst) {
+    const dim = `${escapeHtml(fd.get("dim_largo") || "")} × ${escapeHtml(fd.get("dim_ancho") || "")} × ${escapeHtml(
+      fd.get("dim_alto") || ""
+    )} ${escapeHtml(fd.get("dim_unidad") || "")}`;
+    const totalLine =
+      cotEst?.desglose?.totalEstimado != null
+        ? `<p style="margin-top:10px"><b>Total estimado (cotización):</b> ${escapeHtml(
+            String(cotEst.desglose.totalEstimado)
+          )} ${escapeHtml(cotEst.moneda || "")}</p>`
+        : `<p class="muted" style="margin-top:10px">Sin total estimado (cotización vacía o incompleta).</p>`;
+    return `
+      <p><b>¿Confirma que desea registrar este envío?</b></p>
+      <div class="card" style="box-shadow:none; margin-top:8px">
+        <div class="card-title">Resumen</div>
+        <p><b>Remitente:</b> ${escapeHtml(fd.get("r_nombres") || "")} · doc. ${escapeHtml(fd.get("r_documento") || "")}</p>
+        <p><b>Destinatario:</b> ${escapeHtml(fd.get("d_nombres") || "")} · doc. ${escapeHtml(fd.get("d_documento") || "")}</p>
+        <p><b>Origen:</b> ${escapeHtml(fd.get("origen") || "")} → <b>Destino:</b> ${escapeHtml(fd.get("destino") || "")}</p>
+        <p><b>Tipo de carga:</b> ${escapeHtml(fd.get("tipoCarga") || "")}</p>
+        <p><b>Descripción:</b> ${escapeHtml(fd.get("descripcion") || "")}</p>
+        <p><b>Peso:</b> ${escapeHtml(fd.get("peso") || "")} kg</p>
+        <p><b>Dimensiones:</b> ${dim}</p>
+        ${totalLine}
+      </div>
+    `;
+  }
 
-  form.addEventListener("input", scheduleQuotePreview);
-  form.addEventListener("change", scheduleQuotePreview);
-
-  cargarCatalogoClientes().then(() => applyDefaultsFromConfig().then(() => scheduleQuotePreview()));
-
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    window.GlsAlert.clearAlert(alertEl);
-
-    const fd0 = new FormData(form);
-    const verr = validateRegistroForm(fd0);
-    if (verr) {
-      window.GlsAlert.showAlert(alertEl, { type: "error", message: verr });
-      return;
-    }
-
+  /**
+   * Persistencia del envío (tras confirmación). Mantiene el flujo previo: crear → obtener → modal éxito.
+   */
+  async function ejecutarRegistroEnvio() {
+    const fd = new FormData(form);
     try {
       setBusy(true, "Guardando en Firestore...");
-      const fd = new FormData(form);
       const res = await window.glsApi.envios.crear(payloadFromForm(fd));
 
       if (!res?.ok) {
@@ -658,7 +947,7 @@
           type: "error",
           message: humanizarErrorFirestore(res?.error || "No se pudo crear el envío")
         });
-        setBusy(false);
+        setBusy(false, "");
         return;
       }
 
@@ -697,6 +986,7 @@
             </div>
             <div class="actions" style="gap:10px; flex-wrap:wrap">
               <button type="button" class="btn btn-accent" id="btnPrintComprobante">Imprimir comprobante</button>
+              <button type="button" class="btn btn-accent" id="btnExportPdfComprobante">Exportar PDF</button>
               <a class="btn btn-primary" href="./seguimiento-envio.html?codigo=${qSeg}">Ver trazabilidad</a>
               <a class="btn" href="./geolocalizacion-qr.html?codigo=${qSeg}">Geolocalización + QR</a>
             </div>
@@ -705,23 +995,151 @@
       });
 
       queueMicrotask(() => {
+        const envioDoc = cot?.ok ? cot.envio : null;
         overlay.querySelector("#btnPrintComprobante")?.addEventListener("click", () => {
-          printComprobante({ codigo, envio: cot?.ok ? cot.envio : null, imgSrc });
+          printComprobante({ codigo, envio: envioDoc, imgSrc });
+        });
+        overlay.querySelector("#btnExportPdfComprobante")?.addEventListener("click", () => {
+          if (!window.GlsComprobanteEnvioPdf?.exportComprobantePdf) {
+            window.GlsAlert.showAlert(alertEl, {
+              type: "info",
+              message: "No se cargó el módulo de PDF (comprobante-envio-pdf.js)."
+            });
+            return;
+          }
+          void window.GlsComprobanteEnvioPdf.exportComprobantePdf({ codigo, envio: envioDoc, imgSrc, alertEl });
         });
         overlay.querySelector(".btn-primary")?.focus();
       });
 
       form.reset();
+      if (selClienteCatalogo) selClienteCatalogo.value = "";
+      if (inpBuscarDocCliente) inpBuscarDocCliente.value = "";
+      if (hintBuscarCliente) hintBuscarCliente.textContent = "";
+      lastPreviewCotizacion = null;
       await applyDefaultsFromConfig();
       scheduleQuotePreview();
+      selectTab("cliente", { silent: true });
+      updateClienteTabGate();
       setBusy(false, "Listo.");
     } catch (err) {
       window.GlsAlert.showAlert(alertEl, {
         type: "error",
         message: humanizarErrorFirestore(err?.message || String(err))
       });
-      setBusy(false);
+      setBusy(false, "");
     }
+  }
+
+  btnLimpiarFormulario.addEventListener("click", async () => {
+    if (!formularioTieneDatos()) {
+      await limpiarFormularioCompleto();
+      return;
+    }
+    if (!window.confirm("¿Desea limpiar el formulario? Se perderán los datos ingresados.")) return;
+    await limpiarFormularioCompleto();
+  });
+
+  /** Búsqueda rápida de cliente por documento en Firestore (IPC). */
+  btnBuscarClienteDoc.addEventListener("click", async () => {
+    window.GlsAlert.clearAlert(alertEl);
+    const doc = String(inpBuscarDocCliente?.value || "").trim();
+    if (!doc) {
+      window.GlsAlert.showAlert(alertEl, { type: "error", message: "Ingrese un documento para buscar." });
+      return;
+    }
+    if (hintBuscarCliente) hintBuscarCliente.textContent = "Buscando…";
+    try {
+      const r = await window.glsApi.clientes.obtenerPorDocumento(doc);
+      if (r?.ok && r.cliente) {
+        aplicarRemitenteDesdeObjetoCliente(r.cliente);
+        const v = String(r.cliente.documento || "").trim();
+        if (selClienteCatalogo && [...selClienteCatalogo.options].some((o) => o.value === v)) {
+          selClienteCatalogo.value = v;
+        }
+        if (hintBuscarCliente) hintBuscarCliente.textContent = "";
+        window.GlsAlert.showAlert(alertEl, { type: "success", message: MSG_BUSCAR_CLIENTE_OK });
+      } else {
+        if (hintBuscarCliente) hintBuscarCliente.textContent = "";
+        window.GlsAlert.showAlert(alertEl, { type: "info", message: MSG_BUSCAR_CLIENTE_NO });
+      }
+    } catch (err) {
+      if (hintBuscarCliente) hintBuscarCliente.textContent = "";
+      window.GlsAlert.showAlert(alertEl, {
+        type: "error",
+        message: humanizarErrorFirestore(err?.message || String(err))
+      });
+    }
+  });
+
+  function onFormFieldActivity() {
+    scheduleQuotePreview();
+    updateClienteTabGate();
+  }
+  form.addEventListener("input", onFormFieldActivity);
+  form.addEventListener("change", onFormFieldActivity);
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    window.GlsAlert.clearAlert(alertEl);
+
+    if (!puedeRegistrar) {
+      window.GlsAlert.showAlert(alertEl, { type: "error", message: MSG_PERMISO_REGISTRO });
+      return;
+    }
+
+    const fd0 = new FormData(form);
+    const verr = validateRegistroForm(fd0);
+    if (verr) {
+      window.GlsAlert.showAlert(alertEl, { type: "error", message: verr });
+      focusTabForValidationError(verr);
+      return;
+    }
+
+    const prevPayload = payloadFromForm(fd0);
+    let cotEst = null;
+    try {
+      const prevRes = await window.glsApi.envios.previewCotizacion(prevPayload);
+      if (prevRes?.ok && prevRes.cotizacionEstimada) cotEst = prevRes.cotizacionEstimada;
+    } catch {
+      cotEst = lastPreviewCotizacion;
+    }
+    if (!cotEst) cotEst = lastPreviewCotizacion;
+
+    window.GlsModal.openConfirmModal({
+      title: "Confirmar registro de envío",
+      bodyHtml: buildResumenConfirmacionHtml(fd0, cotEst),
+      confirmLabel: "Sí, registrar",
+      cancelLabel: "Cancelar",
+      onConfirm: () => {
+        void ejecutarRegistroEnvio();
+      }
+    });
+  });
+
+  /** Tras login: permisos, menú y carga inicial del catálogo (auth-guard se mantiene en HTML). */
+  async function initRegistroPage(user) {
+    sessionUser = user;
+    window.GlsMenu?.mountAuthMenu?.();
+    puedeRegistrar = puedeRegistrarEnvios(user);
+    if (bannerPermiso) {
+      if (!puedeRegistrar) {
+        bannerPermiso.style.display = "block";
+        bannerPermiso.textContent = MSG_PERMISO_REGISTRO;
+      } else {
+        bannerPermiso.style.display = "none";
+        bannerPermiso.textContent = "";
+      }
+    }
+    await cargarCatalogoClientes();
+    await applyDefaultsFromConfig();
+    scheduleQuotePreview();
+    selectTab("cliente", { silent: true });
+    updateClienteTabGate();
+  }
+
+  window.GlsAuthGuard?.requireAuthOrRedirect?.().then((u) => {
+    if (u) void initRegistroPage(u);
   });
 })();
 

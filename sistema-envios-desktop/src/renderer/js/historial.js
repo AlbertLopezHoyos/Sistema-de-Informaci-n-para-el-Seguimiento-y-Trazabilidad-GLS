@@ -40,7 +40,7 @@
         <div class="page-head">
           <div>
             <div class="page-title">Historial general</div>
-            <div class="page-subtitle">Lista completa de envíos con filtros (origen, destino, estado, fechas).</div>
+            <div class="page-subtitle">Consulta de envíos con filtros por estado, fechas y búsqueda de texto.</div>
           </div>
           <div class="actions">
             <button class="btn btn-primary btn-icon" id="btnRefresh"><span class="ico">${ICONS.refresh}</span>Actualizar</button>
@@ -51,7 +51,7 @@
 
         <div class="card">
           <div class="card-title">Filtros</div>
-          <div class="card-subtitle">Se consultan los últimos registros descendentes por fecha de registro.</div>
+          <div class="card-subtitle">Orden descendente por fecha de registro. El límite máximo define cuántos documentos se leen en Firestore; use estado, fechas y búsqueda para acotar el listado.</div>
 
           <div class="form-row grid grid-3">
             <div class="field">
@@ -115,9 +115,6 @@
               </tbody>
             </table>
           </div>
-          <div class="hint" style="margin-top:10px">
-            Nota: si tienes muchos envíos, aumenta el límite o ajusta por estado/fechas para reducir lecturas.
-          </div>
         </div>
       </div>
     </main>
@@ -134,6 +131,14 @@
   const fltLimit = document.getElementById("fltLimit");
   const fltDesde = document.getElementById("fltDesde");
   const fltHasta = document.getElementById("fltHasta");
+
+  try {
+    const qs = new URLSearchParams(window.location.search || "");
+    const est = qs.get("estado");
+    if (est && [...fltEstado.options].some((o) => o.value === est)) {
+      fltEstado.value = est;
+    }
+  } catch {}
 
   const btnApply = document.getElementById("btnApply");
   const btnRefresh = document.getElementById("btnRefresh");
@@ -244,6 +249,16 @@
       .join("");
   }
 
+  function buildHistorialStatus(filteredLen, totalLoaded) {
+    const limitCount = Number(fltLimit.value || 800);
+    let s = `Mostrando ${filteredLen} de ${totalLoaded} cargados`;
+    if (totalLoaded >= limitCount && limitCount > 0) {
+      s +=
+        " · Se alcanzó el límite de lectura en Firestore; acote por estado o fechas si no aparece un envío esperado.";
+    }
+    return s;
+  }
+
   async function load() {
     window.GlsAlert.clearAlert(alertEl);
     tblBody.innerHTML = `<tr><td colspan="8" class="muted">Cargando...</td></tr>`;
@@ -261,7 +276,7 @@
       dataset = res.envios || [];
       const filtered = applyClientFilters(dataset);
       renderTable(filtered);
-      setBusy(false, `Mostrando ${filtered.length} de ${dataset.length} cargados`);
+      setBusy(false, buildHistorialStatus(filtered.length, dataset.length));
     } catch (err) {
       window.GlsAlert.showAlert(alertEl, { type: "error", message: err?.message || String(err) });
       setBusy(false, "");
@@ -273,7 +288,7 @@
   fltSearch.addEventListener("input", () => {
     const filtered = applyClientFilters(dataset);
     renderTable(filtered);
-    statusEl.textContent = `Mostrando ${filtered.length} de ${dataset.length} cargados`;
+    statusEl.textContent = buildHistorialStatus(filtered.length, dataset.length);
   });
 
   tblBody.addEventListener("click", async (ev) => {
@@ -404,10 +419,30 @@
             <div class="card-title">Línea de tiempo</div>
             <div class="timeline">${timelineItems || `<div class="muted">Sin historial</div>`}</div>
           </div>
+
+          <div class="actions" style="margin-top:14px; gap:10px; flex-wrap:wrap; padding-top:12px; border-top:1px solid var(--border)">
+            <button type="button" class="btn btn-accent" id="histBtnExportPdf">Exportar PDF (comprobante)</button>
+          </div>
         `
       });
 
       const overlay = document.querySelector(".modal-overlay:last-of-type");
+      const imgQrSrc = `../assets/qr/${encodeURIComponent(envio.codigoEnvio || code)}.png?ts=${Date.now()}`;
+      overlay.querySelector("#histBtnExportPdf")?.addEventListener("click", () => {
+        if (!window.GlsComprobanteEnvioPdf?.exportComprobantePdf) {
+          window.GlsAlert.showAlert(alertEl, {
+            type: "info",
+            message: "No se cargó el módulo de PDF. Verifique jspdf y comprobante-envio-pdf.js en historial.html."
+          });
+          return;
+        }
+        void window.GlsComprobanteEnvioPdf.exportComprobantePdf({
+          codigo: envio.codigoEnvio || code,
+          envio,
+          imgSrc: imgQrSrc,
+          alertEl
+        });
+      });
       const saveBtn = overlay.querySelector("#m_save");
       const estadoSel = overlay.querySelector("#m_estado");
       const obs = overlay.querySelector("#m_obs");
@@ -462,7 +497,7 @@
         }
       });
 
-      setBusy(false, `Mostrando ${applyClientFilters(dataset).length} de ${dataset.length} cargados`);
+      setBusy(false, buildHistorialStatus(applyClientFilters(dataset).length, dataset.length));
     } catch (e) {
       window.GlsAlert.showAlert(alertEl, { type: "error", message: e?.message || String(e) });
       setBusy(false, "");

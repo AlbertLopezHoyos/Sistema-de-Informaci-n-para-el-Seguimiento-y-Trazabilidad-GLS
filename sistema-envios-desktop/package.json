@@ -9,14 +9,17 @@
     "start": "electron .",
     "dev": "electron .",
     "test": "jest",
+    "db:ping": "node database/scripts/00-check-firebase.js",
     "seed:init": "node database/scripts/run-seed.js",
-    "seed:reset": "node database/scripts/05-reset-data.js"
+    "seed:reset": "node database/scripts/05-reset-data.js",
+    "seed:users": "node database/scripts/ensure-usuarios-acceso.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
     "dotenv": "^16.6.1",
     "electron": "^37.2.5",
     "firebase": "^12.12.1",
+    "jspdf": "^2.5.2",
     "leaflet": "^1.9.4",
     "qrcode": "^1.5.4"
   },

@@ -8,8 +8,116 @@
     mapPin:
       '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 21s7-6.1 7-12a7 7 0 1 0-14 0c0 5.9 7 12 7 12Z" stroke="currentColor" stroke-width="1.8"/><path d="M12 12.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" stroke="currentColor" stroke-width="1.8"/></svg>',
     qr:
-      '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 4h7v7H4V4ZM13 4h7v7h-7V4ZM4 13h7v7H4v-7Z" stroke="currentColor" stroke-width="1.8"/><path d="M13 13h3v3h-3v-3ZM17 13h3v7h-7v-3" stroke="currentColor" stroke-width="1.8"/></svg>'
+      '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 4h7v7H4V4ZM13 4h7v7h-7V4ZM4 13h7v7H4v-7Z" stroke="currentColor" stroke-width="1.8"/><path d="M13 13h3v3h-3v-3ZM17 13h3v7h-7v-3" stroke="currentColor" stroke-width="1.8"/></svg>',
+    refresh:
+      '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 12a8 8 0 0 1 14-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M18 2v5h-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M20 12a8 8 0 0 1-14 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M6 22v-5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+    chevron:
+      '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
   };
+
+  function escapeHtml(s) {
+    return String(s)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function historialUrlPorEstado(estado) {
+    if (!estado || estado === "Todos") return "./historial.html";
+    return `./historial.html?estado=${encodeURIComponent(estado)}`;
+  }
+
+  function prefersReducedMotion() {
+    return Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
+  }
+
+  /** Animación breve del contador KPI (accesible si no hay animaciones). */
+  function animateCount(el, target, duration = 420) {
+    if (!el) return;
+    const n = Math.max(0, Math.floor(Number(target) || 0));
+    if (prefersReducedMotion()) {
+      el.textContent = String(n);
+      return;
+    }
+    const start = performance.now();
+    const from = 0;
+    function frame(now) {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - (1 - t) ** 2;
+      el.textContent = String(Math.round(from + (n - from) * eased));
+      if (t < 1) requestAnimationFrame(frame);
+      else el.textContent = String(n);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function renderActividadReciente(envios) {
+    const el = document.getElementById("dashRecentList");
+    if (!el) return;
+    const sorted = [...(envios || [])].sort((a, b) => {
+      const ta = Date.parse(a.fechaRegistro || "") || 0;
+      const tb = Date.parse(b.fechaRegistro || "") || 0;
+      return tb - ta;
+    });
+    const top = sorted.slice(0, 6);
+    if (!top.length) {
+      el.innerHTML = `<li class="dash-recent-empty muted">Sin envíos aún. Use <b>Nuevo envío</b> para registrar el primero.</li>`;
+      return;
+    }
+    el.innerHTML = top
+      .map((e) => {
+        const codigo = e.codigoEnvio || "";
+        const href = `./seguimiento-envio.html?codigo=${encodeURIComponent(codigo)}`;
+        const est = e.estadoActual || "—";
+        const badge =
+          String(est).toLowerCase().includes("entregado") ? "ok" : String(est).toLowerCase().includes("observ") ? "warn" : "info";
+        return `<li>
+          <a class="dash-recent-item" href="${href}">
+            <div class="dash-recent-text">
+              <span class="dash-recent-main">
+                <span class="mono dash-recent-code">${escapeHtml(codigo)}</span>
+                <span class="badge ${badge}">${escapeHtml(est)}</span>
+              </span>
+              <span class="muted dash-recent-meta">${escapeHtml(e.origen || "—")} → ${escapeHtml(e.destino || "—")}</span>
+            </div>
+            <span class="dash-recent-ico" aria-hidden="true">${ICONS.chevron}</span>
+          </a>
+        </li>`;
+      })
+      .join("");
+  }
+
+  async function cargarPanel() {
+    const alertEl = document.getElementById("alert");
+    const btn = document.getElementById("btnDashRefresh");
+    const hint = document.getElementById("dashUpdatedHint");
+    window.GlsAlert.clearAlert(alertEl);
+    if (btn) btn.disabled = true;
+    try {
+      const ping = await window.glsApi.app.ping();
+      if (!ping?.ok) throw new Error("IPC de la aplicación no disponible");
+
+      const hist = await window.glsApi.envios.listarHistorial({ estado: "Todos", limitCount: 2000 });
+      if (!hist?.ok) throw new Error(hist?.error || "No se pudo cargar datos");
+
+      const envios = hist.envios || [];
+      const count = (estado) => envios.filter((e) => (e.estadoActual || "") === estado).length;
+
+      animateCount(document.getElementById("kpiTotal"), envios.length);
+      animateCount(document.getElementById("kpiTransito"), count("En tránsito"));
+      animateCount(document.getElementById("kpiEntregados"), count("Entregado"));
+      animateCount(document.getElementById("kpiObservados"), count("Observado"));
+      renderActividadReciente(envios);
+
+      if (hint) hint.textContent = `Actualizado ${new Date().toLocaleString("es-PE", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
+    } catch (e) {
+      window.GlsAlert.showAlert(alertEl, { type: "error", message: `Error cargando panel: ${e?.message || e}` });
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
 
   function renderTopbar() {
     return `
@@ -33,68 +141,68 @@
       <div class="page-head">
         <div>
           <div class="page-title">Dashboard</div>
-          <div class="page-subtitle">Resumen operativo de envíos y accesos rápidos a módulos.</div>
+          <div class="page-subtitle">Indicadores en vivo desde Firestore. Pulse un KPI para ver el listado filtrado en historial.</div>
+          <div class="muted dash-updated-hint" id="dashUpdatedHint"></div>
         </div>
         <div class="actions">
+          <button type="button" class="btn btn-icon" id="btnDashRefresh" title="Actualizar indicadores">
+            <span class="ico">${ICONS.refresh}</span>Actualizar
+          </button>
           <a class="btn btn-primary btn-icon" href="./registro-envio.html"><span class="ico">${ICONS.box}</span>Registrar envío</a>
           <a class="btn btn-icon" href="./seguimiento-envio.html"><span class="ico">${ICONS.truck}</span>Buscar envío</a>
         </div>
       </div>
       <div id="alert"></div>
         <div class="grid grid-3">
-        <div class="card kpi kpi-accent">
+        <a class="card kpi kpi-accent kpi-dash-link" href="${historialUrlPorEstado("Todos")}" title="Ver todos en historial">
           <div>
             <div class="num" id="kpiTotal">—</div>
             <div class="label">Total de envíos</div>
           </div>
           <div class="ico" aria-hidden="true">${ICONS.box}</div>
-        </div>
-        <div class="card kpi kpi-warn">
+        </a>
+        <a class="card kpi kpi-warn kpi-dash-link" href="${historialUrlPorEstado("En tránsito")}" title="Filtrar: En tránsito">
           <div>
             <div class="num" id="kpiTransito">—</div>
             <div class="label">En tránsito</div>
           </div>
           <div class="ico" aria-hidden="true">${ICONS.truck}</div>
-        </div>
-        <div class="card kpi kpi-ok">
+        </a>
+        <a class="card kpi kpi-ok kpi-dash-link" href="${historialUrlPorEstado("Entregado")}" title="Filtrar: Entregado">
           <div>
             <div class="num" id="kpiEntregados">—</div>
             <div class="label">Entregados</div>
           </div>
           <div class="ico" aria-hidden="true">${ICONS.qr}</div>
-        </div>
+        </a>
       </div>
-      <div class="grid" style="margin-top:14px">
+      <div class="grid" style="margin-top:12px">
         <div class="grid grid-2">
-          <div class="card kpi kpi-danger">
+          <a class="card kpi kpi-danger kpi-dash-link" href="${historialUrlPorEstado("Observado")}" title="Filtrar: Observado">
             <div>
               <div class="num" id="kpiObservados">—</div>
               <div class="label">Observados</div>
             </div>
             <div class="ico" aria-hidden="true">${ICONS.mapPin}</div>
-          </div>
-          <div class="card">
+          </a>
+          <div class="card dash-quick-card">
             <div class="card-title">Acciones rápidas</div>
-            <div class="card-subtitle">Navega con el menú lateral para acceder a registro, trazabilidad, historial y geolocalización.</div>
+            <div class="card-subtitle">Accesos directos a los módulos más usados.</div>
             <div class="actions">
               <a class="btn btn-primary btn-icon" href="./registro-envio.html"><span class="ico">${ICONS.box}</span>Nuevo envío</a>
-              <a class="btn btn-icon" href="./historial.html"><span class="ico">${ICONS.box}</span>Historial general</a>
+              <a class="btn btn-icon" href="./historial.html"><span class="ico">${ICONS.box}</span>Historial</a>
               <a class="btn btn-icon" href="./seguimiento-envio.html"><span class="ico">${ICONS.truck}</span>Trazabilidad</a>
               <a class="btn btn-icon" href="./geolocalizacion-qr.html"><span class="ico">${ICONS.mapPin}</span>Geolocalización + QR</a>
             </div>
           </div>
         </div>
       </div>
-      <div class="grid" style="margin-top:14px">
-        <div class="card">
-          <div class="card-title">Estado del sistema</div>
-          <div class="card-subtitle">Aplicación local (Electron) conectada a Firestore. QR se genera localmente en PNG.</div>
-          <div class="actions">
-            <div class="badge ok">Electron: OK</div>
-            <div class="badge info">Firestore: conectado</div>
-            <div class="badge">QR: PNG local</div>
-          </div>
-        </div>
+      <div class="card dash-recent-card" style="margin-top:12px">
+        <div class="card-title">Actividad reciente</div>
+        <div class="card-subtitle">Últimos envíos por fecha de registro. Clic en una fila para abrir trazabilidad.</div>
+        <ul class="dash-recent-list" id="dashRecentList">
+          <li class="dash-recent-empty muted">Cargando…</li>
+        </ul>
       </div>
       </div>
     </main>
@@ -105,24 +213,10 @@
   const alertEl = document.getElementById("alert");
   window.GlsAlert.clearAlert(alertEl);
 
-  (async () => {
-    try {
-      const ping = await window.glsApi.app.ping();
-      if (!ping?.ok) throw new Error("No se pudo iniciar IPC de la aplicación");
+  document.getElementById("btnDashRefresh")?.addEventListener("click", () => {
+    void cargarPanel();
+  });
 
-      const hist = await window.glsApi.envios.listarHistorial({ estado: "Todos", limitCount: 2000 });
-      if (!hist?.ok) throw new Error(hist?.error || "No se pudo cargar KPIs");
-
-      const envios = hist.envios || [];
-      const count = (estado) => envios.filter((e) => (e.estadoActual || "") === estado).length;
-
-      document.getElementById("kpiTotal").textContent = String(envios.length);
-      document.getElementById("kpiTransito").textContent = String(count("En tránsito"));
-      document.getElementById("kpiEntregados").textContent = String(count("Entregado"));
-      document.getElementById("kpiObservados").textContent = String(count("Observado"));
-    } catch (e) {
-      window.GlsAlert.showAlert(alertEl, { type: "error", message: `Error inicializando app: ${e?.message || e}` });
-    }
-  })();
+  void cargarPanel();
 })();
 

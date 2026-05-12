@@ -12,7 +12,8 @@ function on(channel, handler) {
 contextBridge.exposeInMainWorld("glsApi", {
   app: {
     ping: () => invoke("app:ping"),
-    getCotizacionDefaults: () => invoke("app:getCotizacionDefaults")
+    getCotizacionDefaults: () => invoke("app:getCotizacionDefaults"),
+    savePdfFile: (payload) => invoke("app:savePdfFile", payload || {})
   },
   auth: {
     policy: () => invoke("auth:policy"),
@@ -26,7 +27,8 @@ contextBridge.exposeInMainWorld("glsApi", {
   },
   clientes: {
     listar: (opts) => invoke("clientes:listar", opts || {}),
-    crear: (payload) => invoke("clientes:crear", payload)
+    crear: (payload) => invoke("clientes:crear", payload),
+    obtenerPorDocumento: (documento) => invoke("clientes:obtenerPorDocumento", { documento })
   },
   envios: {
      previewCotizacion: (data) => invoke("envios:previewCotizacion", data),

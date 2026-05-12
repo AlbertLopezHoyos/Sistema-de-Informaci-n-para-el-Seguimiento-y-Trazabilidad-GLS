@@ -267,7 +267,7 @@
               </div>
               <div class="field">
                 <label>Detalle de evidencia</label>
-                <textarea id="evidDetSeg" rows="2" placeholder="Opcional (ej. receptor, lugar, notas)"></textarea>
+                <textarea id="evidDetSeg" rows="2" placeholder="Opcional (receptor, lugar, detalle)"></textarea>
               </div>
             </div>
             <div class="muted" style="font-size:12px">Para <b>Entregado</b> debe indicarse la referencia de evidencia según política operativa.</div>

@@ -1,4 +1,5 @@
 const path = require("path");
+const fs = require("fs").promises;
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const dotenv = require("dotenv");
 
@@ -29,6 +30,17 @@ function requireAdmin() {
   return null;
 }
 
+/** Solo administrador u operaciones pueden crear envíos (validación en proceso principal). */
+function assertPuedeRegistrarEnvio() {
+  const rol = String(currentUser?.rol || "").trim().toLowerCase();
+  if (!currentUser || !rol) {
+    throw new Error("No tiene permisos para registrar envíos.");
+  }
+  if (rol !== "admin" && rol !== "operaciones") {
+    throw new Error("No tiene permisos para registrar envíos.");
+  }
+}
+
 async function createMainWindow() {
   mainWindow = new BrowserWindow(getMainWindowOptions());
 
@@ -49,6 +61,24 @@ function registerIpcHandlers() {
     ok: true,
     defaults: appConfig.cotizacionDefaults
   }));
+
+  /** Guardar PDF generado en el renderer (base64) — diálogo nativo de escritorio. */
+  ipcMain.handle("app:savePdfFile", async (_evt, { defaultFilename, base64Pdf } = {}) => {
+    try {
+      if (!mainWindow) return { ok: false, error: "Ventana no disponible." };
+      if (!base64Pdf) return { ok: false, error: "Sin datos PDF." };
+      const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+        title: "Guardar comprobante PDF",
+        defaultPath: defaultFilename || "comprobante-registro-envio.pdf",
+        filters: [{ name: "PDF", extensions: ["pdf"] }]
+      });
+      if (canceled || !filePath) return { ok: true, canceled: true };
+      await fs.writeFile(filePath, Buffer.from(String(base64Pdf), "base64"));
+      return { ok: true, filePath };
+    } catch (err) {
+      return { ok: false, error: err?.message || String(err) };
+    }
+  });
 
   ipcMain.handle("auth:me", async () => ({ ok: true, user: currentUser }));
 
@@ -141,6 +171,15 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle("clientes:obtenerPorDocumento", async (_evt, payload) => {
+    try {
+      const cliente = await clienteController.obtenerPorDocumento(payload?.documento);
+      return { ok: true, cliente };
+    } catch (err) {
+      return { ok: false, error: err?.message || String(err) };
+    }
+  });
+
   ipcMain.handle("envios:previewCotizacion", async (_evt, payload) => {
     try {
       return envioController.previewCotizacion(payload);
@@ -151,6 +190,7 @@ function registerIpcHandlers() {
 
   ipcMain.handle("envios:crear", async (_evt, payload) => {
     try {
+      assertPuedeRegistrarEnvio();
       const body = {
         ...(payload || {}),
         registradoPor: currentUser?.email || currentUser?.nombres || ""

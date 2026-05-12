@@ -2,13 +2,13 @@
   display:flex;
   align-items:flex-start;
   justify-content:space-between;
-  gap:10px;
+  gap:8px;
 }
-.kpi .num{font-size:24px; font-weight:950; letter-spacing:.2px}
-.kpi .label{color:var(--muted); font-size:12px; margin-top:6px}
+.kpi .num{font-size:21px; font-weight:950; letter-spacing:.2px}
+.kpi .label{color:var(--muted); font-size:11px; margin-top:4px}
 .kpi .ico{
-  width:40px; height:40px;
-  border-radius:12px;
+  width:36px; height:36px;
+  border-radius:10px;
   display:grid; place-items:center;
   background: linear-gradient(180deg, rgba(122, 40, 40, .10), rgba(245, 124, 0, .10));
   border:1px solid var(--border-2);
@@ -19,3 +19,88 @@
 .kpi.kpi-warn .ico{background: linear-gradient(180deg, rgba(217,119,6,.14), rgba(122, 40, 40, .06))}
 .kpi.kpi-danger .ico{background: linear-gradient(180deg, rgba(220,38,38,.12), rgba(122, 40, 40, .06))}
 
+/* Dashboard: KPI como enlaces + lista reciente */
+a.kpi-dash-link{
+  text-decoration:none;
+  color:inherit;
+  cursor:pointer;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+a.kpi-dash-link:hover{
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(2,6,23,.12);
+  border-color: rgba(245, 124, 0, .35);
+}
+a.kpi-dash-link:focus-visible{
+  outline:2px solid var(--accent);
+  outline-offset:2px;
+}
+@media (prefers-reduced-motion: reduce){
+  a.kpi-dash-link{ transition:none; }
+  a.kpi-dash-link:hover{ transform:none; }
+}
+
+.dash-updated-hint{
+  margin-top:6px;
+  font-size:11px;
+  min-height:1.2em;
+}
+
+.dash-recent-list{
+  list-style:none;
+  margin:0;
+  padding:0;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.dash-recent-empty{
+  padding:10px 4px;
+  font-size:13px;
+}
+.dash-recent-item{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 12px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  background: var(--surface-2);
+  text-decoration:none;
+  color: inherit;
+  transition: background .15s ease, border-color .15s ease;
+}
+.dash-recent-item:hover{
+  background: #fff;
+  border-color: rgba(122, 40, 40, .22);
+}
+.dash-recent-text{
+  flex:1;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+.dash-recent-main{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.dash-recent-code{ font-weight:900; font-size:13px; }
+.dash-recent-meta{
+  font-size:12px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.dash-recent-ico{
+  flex-shrink:0;
+  color: var(--muted);
+  display:grid;
+  place-items:center;
+  opacity:.75;
+}
+.dash-recent-item:hover .dash-recent-ico{ color: var(--accent); opacity:1; }
+
+.dash-quick-card .actions{ gap:8px; }

@@ -51,7 +51,7 @@ Las consultas del código **no dependen** de índices compuestos para `historial
 
 Definición de referencia en `database/firestore.indexes.json`:
 
-| Colección            | Campos                                      | Notas                          |
+| Colección            | Campos                                      | Alcance                        |
 |---------------------|---------------------------------------------|--------------------------------|
 | `historial_envios`  | `codigoEnvio` ASC, `fechaActualizacion` ASC | Opcional si se usa orderBy en servidor |
 | `envios`            | `estadoActual` ASC, `fechaRegistro` DESC  | Opcional (lista activos ya sin `in`+orderBy) |

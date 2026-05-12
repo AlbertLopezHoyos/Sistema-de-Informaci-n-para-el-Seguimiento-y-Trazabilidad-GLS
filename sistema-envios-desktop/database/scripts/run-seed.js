@@ -19,6 +19,13 @@ async function run() {
   }
 
   console.log("[seed] Completado.");
+  console.log("");
+  console.log("[seed] Inicio de sesión en la app (valores por defecto del seed de usuarios):");
+  console.log("       Admin:         admin@gls.pe          /  admin1234");
+  console.log("       Operaciones:   operaciones@gls.pe    /  Operaciones2026");
+  console.log("       Si definió ADMIN_SEED_* u OPERACIONES_SEED_* en .env, use: npm run seed:users");
+  console.log("");
+  console.log("[seed] Envíos de ejemplo: ENV-{año}-0001 … 0008 (ver database/scripts/README.md).");
 }
 
 run().catch((err) => {

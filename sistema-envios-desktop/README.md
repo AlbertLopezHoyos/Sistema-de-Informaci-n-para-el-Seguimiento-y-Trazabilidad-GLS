@@ -50,16 +50,29 @@ Se abrirá la ventana principal con menú lateral:
 - Seguimiento / Trazabilidad
 - Geolocalización + QR
 
+La aplicación no incluye servidor web ni Express: la UI del renderer invoca al proceso principal por **IPC** (`preload` → `ipcMain.handle`). Los códigos QR generados se guardan en `src/renderer/assets/qr/` como PNG.
+
 ## Inicialización de datos (seed)
 
+Guía detallada de cada script, orden y credenciales de prueba: **`database/scripts/README.md`**.
+
 ```bash
+npm run db:ping
 npm run seed:init
 ```
 
-Para reiniciar colecciones (elimina datos y vuelve a iniciar):
+Solo usuarios de acceso (p. ej. tras un reset):
+
+```bash
+npm run seed:users
+```
+
+Para vaciar colecciones de demostración y volver a sembrar:
 
 ```bash
 npm run seed:reset
+npm run seed:init
+npm run seed:users
 ```
 
 ## Estructura del proyecto
@@ -69,10 +82,3 @@ npm run seed:reset
 - `src/renderer/`: HTML/CSS/JS de ventanas internas (UI)
 - `database/scripts/`: inicialización de datos (Firestore)
 - `tests/`: tests automatizados (Jest)
-
-## Notas importantes
-
-- No se usa Express ni servidor web.
-- La comunicación se realiza por IPC (`preload` → `ipcRenderer.invoke` → `ipcMain.handle`).
-- Los QR se guardan localmente en `src/renderer/assets/qr/`.
-

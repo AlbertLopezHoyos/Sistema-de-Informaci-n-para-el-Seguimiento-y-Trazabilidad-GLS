@@ -1,6 +1,7 @@
 const path = require("path");
 const { nowIso } = require("../../utils/fechas");
 const { generateQrPng } = require("../../utils/qrGenerator");
+const { buildQrDeepLink } = require("../../utils/qrDeepLink");
 
 function getQrOutputPaths(codigoEnvio) {
   const fileName = `${codigoEnvio}.png`;
@@ -11,10 +12,16 @@ function getQrOutputPaths(codigoEnvio) {
 
 async function generarQrParaEnvio(codigoEnvio) {
   const { absolute, rutaLocalQr } = getQrOutputPaths(codigoEnvio);
-  await generateQrPng({ content: codigoEnvio, outputFilePath: absolute });
+  const contenidoQr = buildQrDeepLink(codigoEnvio);
+  await generateQrPng({
+    content: contenidoQr,
+    outputFilePath: absolute,
+    width: 768,
+    withLogo: true
+  });
   return {
     codigoEnvio,
-    contenidoQr: codigoEnvio,
+    contenidoQr,
     rutaLocalQr,
     fechaGeneracion: nowIso()
   };

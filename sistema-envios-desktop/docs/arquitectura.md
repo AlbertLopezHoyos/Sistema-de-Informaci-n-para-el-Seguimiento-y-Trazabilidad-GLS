@@ -19,3 +19,15 @@ Renderer → `window.glsApi.*` → IPC (`ipcRenderer.invoke`) → Main (`ipcMain
 
 Firestore (colecciones) según `database/firestore-structure.md`.
 
+Firebase **Storage** para evidencias de entrega (`uploads/evidencias/{codigoEnvio}/`).
+
+## UI global
+
+- `src/renderer/components/toast.js` + `toast.css`: notificaciones no bloqueantes.
+- `src/renderer/components/ui-core.js`: integra toast con `GlsAlert` y utilidades (loader, empty).
+- `src/renderer/assets/css/ui-enhancements.css`: skeleton, scrollbars, transiciones.
+
+## Respaldo
+
+`src/modules/backup/backup.service.js` exporta/importa JSON de todas las colecciones operativas; UI en `backup.html` (admin).
+

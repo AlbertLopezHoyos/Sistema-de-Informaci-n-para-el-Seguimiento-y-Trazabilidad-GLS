@@ -5,17 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Registro de Envío - Sistema de Envíos</title>
     <link rel="stylesheet" href="../assets/css/styles.css" />
+    <link rel="stylesheet" href="../assets/css/toast.css" />
+    <link rel="stylesheet" href="../assets/css/ui-enhancements.css" />
+    <link rel="stylesheet" href="../assets/css/production-polish.css" />
     <link rel="stylesheet" href="../assets/css/forms.css" />
   </head>
   <body>
     <div id="app" class="app"></div>
 
     <script src="../components/menu.js"></script>
+    <script src="../components/page-chrome.js"></script>
+        <script src="../components/toast.js"></script>
+    <script src="../components/ui-core.js"></script>
+    <script src="../js/gls-error-handler.js"></script>
     <script src="../components/alert.js"></script>
     <script src="../components/modal.js"></script>
     <script src="../js/auth-guard.js"></script>
+    <script src="../js/estado-envio-ui.js"></script>
     <!-- jsPDF UMD: exportación PDF del comprobante (renderer, sin bundler). -->
     <script src="../../../node_modules/jspdf/dist/jspdf.umd.min.js"></script>
+    <script src="../js/comprobante-envio-shared.js"></script>
     <script src="../js/comprobante-envio-pdf.js"></script>
     <script src="../js/registro-envio.js"></script>
   </body>

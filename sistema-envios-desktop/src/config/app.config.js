@@ -23,8 +23,11 @@ module.exports = {
     tarifaPorKm: numEnv("COT_TARIFA_KM", 1.2),
     seguroPorcentaje: numEnv("COT_SEGURO_PCT", 0)
   },
+  /** Inactividad máxima antes de cerrar sesión (ms). Por defecto 30 min. */
+  sessionTimeoutMs: numEnv("SESSION_TIMEOUT_MS", 30 * 60 * 1000),
   estadosPermitidos: [
     "Registrado",
+    "En almacén",
     "En tránsito",
     "En reparto",
     "Entregado",

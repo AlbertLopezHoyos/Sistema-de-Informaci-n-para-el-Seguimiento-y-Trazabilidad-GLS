@@ -49,5 +49,25 @@ async function getQrByCodigo(codigoEnvio) {
   return { id: snap.id, ...snap.data() };
 }
 
-module.exports = { getEnvioByCodigo, addUbicacion, getLastUbicacion, upsertQr, getQrByCodigo };
+async function listUbicacionesByCodigo(codigoEnvio) {
+  const q = query(collection(getDb(), "ubicaciones_envios"), where("codigoEnvio", "==", codigoEnvio), limit(120));
+  const snap = await getDocs(q);
+  const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  rows.sort((a, b) => {
+    const ta = Date.parse(a.fechaRegistro || "") || 0;
+    const tb = Date.parse(b.fechaRegistro || "") || 0;
+    if (ta !== tb) return ta - tb;
+    return String(a.id || "").localeCompare(String(b.id || ""));
+  });
+  return rows;
+}
+
+module.exports = {
+  getEnvioByCodigo,
+  addUbicacion,
+  getLastUbicacion,
+  listUbicacionesByCodigo,
+  upsertQr,
+  getQrByCodigo
+};
 

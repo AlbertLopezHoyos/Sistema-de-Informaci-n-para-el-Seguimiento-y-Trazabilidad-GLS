@@ -22,7 +22,7 @@ async function register({ email, password, nombres, rol }) {
   const p = requiredString(password, "password");
   const n = requiredString(nombres, "nombres");
   const rRaw = optionalString(rol) || "operaciones";
-  const permitidos = ["admin", "operaciones"];
+  const permitidos = ["admin", "operaciones", "consulta"];
   const r = permitidos.includes(rRaw) ? rRaw : "operaciones";
 
   if (p.length < 6) throw new Error("La contraseña debe tener al menos 6 caracteres");

@@ -1,0 +1,5 @@
+Sistema de Información para el Seguimiento y Trazabilidad de Envíos
+GRUPO LOGÍSTICO SALAZAR S.A.C.
+
+Software de uso académico y operativo interno.
+Copyright (c) GRUPO LOGÍSTICO SALAZAR S.A.C.

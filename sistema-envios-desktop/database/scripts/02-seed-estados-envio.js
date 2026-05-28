@@ -1,6 +1,14 @@
 const { getDb, doc, setDoc } = require("../../src/config/firebase.config");
 
-const ESTADOS = ["Registrado", "En tránsito", "En reparto", "Entregado", "Observado", "Cancelado"];
+const ESTADOS = [
+  "Registrado",
+  "En almacén",
+  "En tránsito",
+  "En reparto",
+  "Entregado",
+  "Observado",
+  "Cancelado"
+];
 
 module.exports = async function seedEstados() {
   console.log("[seed] 02-seed-estados-envio");

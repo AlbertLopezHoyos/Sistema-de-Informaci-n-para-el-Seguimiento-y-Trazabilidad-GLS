@@ -19,6 +19,9 @@
 .kpi.kpi-warn .ico{background: linear-gradient(180deg, rgba(217,119,6,.14), rgba(122, 40, 40, .06))}
 .kpi.kpi-danger .ico{background: linear-gradient(180deg, rgba(220,38,38,.12), rgba(122, 40, 40, .06))}
 
+.dash-charts-grid .dash-chart-card{ min-height:280px; }
+.dash-chart-canvas{ width:100% !important; height:220px !important; max-height:240px; }
+
 /* Dashboard: KPI como enlaces + lista reciente */
 a.kpi-dash-link{
   text-decoration:none;

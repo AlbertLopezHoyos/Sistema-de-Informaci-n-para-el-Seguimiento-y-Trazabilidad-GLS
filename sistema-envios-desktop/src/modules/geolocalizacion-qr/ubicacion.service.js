@@ -7,7 +7,8 @@ async function buscar(codigoEnvio) {
   if (!envio) return { ok: false, error: "Envío no encontrado" };
   const lastUbicacion = await repo.getLastUbicacion(codigoEnvio);
   const qr = await repo.getQrByCodigo(codigoEnvio);
-  return { ok: true, envio, lastUbicacion, qr };
+  const ubicaciones = await repo.listUbicacionesByCodigo(codigoEnvio);
+  return { ok: true, envio, lastUbicacion, qr, ubicaciones };
 }
 
 async function registrarUbicacion(payload) {
@@ -18,7 +19,9 @@ async function registrarUbicacion(payload) {
   const entry = {
     ...data,
     fechaRegistro: nowIso(),
-    observacion: data.observacion || ""
+    observacion: data.observacion || "",
+    responsable: data.responsable || "Área de operaciones",
+    registradoPor: data.registradoPor || ""
   };
   await repo.addUbicacion(entry);
   return await buscar(data.codigoEnvio);

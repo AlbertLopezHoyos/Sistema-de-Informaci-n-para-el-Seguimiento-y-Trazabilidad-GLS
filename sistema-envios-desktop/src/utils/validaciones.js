@@ -46,6 +46,20 @@ function validateDocumento(v, field) {
   return s;
 }
 
+function validateEmail(v, field = "email") {
+  const s = requiredString(v, field).toLowerCase().slice(0, 120);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) throw new Error(`Correo inválido: ${field}`);
+  return s;
+}
+
+function validateCodigoEnvioField(v, field = "codigoEnvio") {
+  const s = requiredString(v, field).toUpperCase();
+  if (!/^ENV-\d{4}-\d{4,}$/.test(s)) {
+    throw new Error("Código de envío inválido (formato ENV-AAAA-NNNN).");
+  }
+  return s;
+}
+
 module.exports = {
   requiredString,
   optionalString,
@@ -54,6 +68,8 @@ module.exports = {
   optionalPositiveNumber,
   optionalNonNegativeNumber,
   validateTelefono,
-  validateDocumento
+  validateDocumento,
+  validateEmail,
+  validateCodigoEnvioField
 };
 

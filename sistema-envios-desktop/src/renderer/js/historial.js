@@ -8,23 +8,10 @@
       '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5 18a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15Z" stroke="currentColor" stroke-width="1.8"/><path d="M16.5 16.5 21 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>'
   };
 
-  function renderTopbar() {
-    return `
-      <header class="topbar">
-        <div class="topbar-inner">
-          <div class="topbar-title">
-            <div class="app-name">Sistema de Información para el Seguimiento y Trazabilidad de Envíos en el Área de Operaciones</div>
-            <div class="company">GRUPO LOGÍSTICO SALAZAR S.A.C. · Área de Operaciones – Gestión de información logística</div>
-          </div>
-          <div class="area-pill"><span style="color:var(--accent)">●</span> Operaciones</div>
-        </div>
-      </header>
-    `;
-  }
-
   const ESTADOS = [
     "Todos",
     "Registrado",
+    "En almacén",
     "En tránsito",
     "En reparto",
     "Entregado",
@@ -35,7 +22,7 @@
   appEl.innerHTML = `
     ${window.GlsMenu.renderMenu("historial")}
     <main class="main">
-      ${renderTopbar()}
+      ${window.GlsPageChrome.renderTopbar()}
       <div class="content">
         <div class="page-head">
           <div>
@@ -44,6 +31,8 @@
           </div>
           <div class="actions">
             <button class="btn btn-primary btn-icon" id="btnRefresh"><span class="ico">${ICONS.refresh}</span>Actualizar</button>
+            <button type="button" class="btn btn-icon" id="btnExportCsv" title="Exportar listado visible">CSV</button>
+            <button type="button" class="btn btn-icon" id="btnExportXlsx">Excel</button>
           </div>
         </div>
 
@@ -87,17 +76,17 @@
             </div>
           </div>
 
-          <div class="actions" style="margin-top:10px">
+          <div class="actions u-mt-sm">
             <button class="btn btn-accent btn-icon" id="btnApply"><span class="ico">${ICONS.search}</span>Aplicar filtros</button>
             <span class="muted" id="status"></span>
           </div>
         </div>
 
-        <div class="card" style="margin-top:14px">
+        <div class="card u-mt-md">
           <div class="card-title">Registros</div>
           <div class="card-subtitle">Haz clic en una fila para ver detalles y trazabilidad del envío.</div>
-          <div style="overflow:auto; border-radius: 12px; border:1px solid var(--border)">
-            <table class="table" style="border:none; border-radius:0; box-shadow:none; min-width:1080px">
+          <div class="table-scroll u-mt-sm">
+            <table class="table" style="min-width:1080px">
               <thead>
                 <tr>
                   <th>Código</th>
@@ -120,7 +109,17 @@
     </main>
   `;
 
-  window.GlsAuthGuard?.requireAuthOrRedirect?.().then(() => window.GlsMenu?.mountAuthMenu?.());
+  window.GlsAuthGuard?.requireAuthOrRedirect?.().then(async () => {
+    window.GlsMenu?.mountAuthMenu?.();
+    try {
+      const me = await window.glsApi.auth.me();
+      const rol = String(me?.user?.rol || "").toLowerCase();
+      permiteActualizarEstado = rol === "admin" || rol === "operaciones";
+    } catch {
+      permiteActualizarEstado = false;
+    }
+    await load();
+  });
 
   const alertEl = document.getElementById("alert");
   const tblBody = document.getElementById("tblBody");
@@ -144,6 +143,7 @@
   const btnRefresh = document.getElementById("btnRefresh");
 
   let dataset = [];
+  let permiteActualizarEstado = false;
 
   function setBusy(busy, text) {
     btnApply.disabled = busy;
@@ -177,11 +177,7 @@
   }
 
   function badgeForEstado(estado) {
-    const e = (estado || "").toLowerCase();
-    if (e.includes("entregado")) return "badge ok";
-    if (e.includes("cancel")) return "badge danger";
-    if (e.includes("observ")) return "badge warn";
-    return "badge info";
+    return window.GlsEstadoEnvio?.badgeHtml?.(estado) || `<span class="badge">${escapeHtml(estado || "—")}</span>`;
   }
 
   function applyClientFilters(items) {
@@ -204,7 +200,9 @@
         e.tipoCarga,
         e.descripcion,
         e.remitente?.nombres,
+        e.remitente?.documento,
         e.destinatario?.nombres,
+        e.destinatario?.documento,
         e.clienteAsociado?.nombres,
         e.clienteAsociado?.documento,
         e.clienteAsociado?.empresa,
@@ -238,7 +236,7 @@
             <td class="mono"><b>${escapeHtml(codigo)}</b></td>
             <td>${escapeHtml(e.origen || "")}</td>
             <td>${escapeHtml(e.destino || "")}</td>
-            <td><span class="${badgeForEstado(estado)}">${escapeHtml(estado)}</span></td>
+            <td>${badgeForEstado(estado)}</td>
             <td class="mono">${escapeHtml(reg)}</td>
             <td>${escapeHtml(e.tipoCarga || "")}</td>
             <td class="mono">${escapeHtml(String(e.peso ?? ""))}</td>
@@ -247,6 +245,25 @@
         `;
       })
       .join("");
+  }
+
+  function buildHistorialFiltersLine() {
+    const parts = [`Estado: ${fltEstado.value || "Todos"}`];
+    if (fltDesde.value) parts.push(`Desde: ${fltDesde.value}`);
+    if (fltHasta.value) parts.push(`Hasta: ${fltHasta.value}`);
+    const q = (fltSearch.value || "").trim();
+    if (q) parts.push(`Búsqueda: ${q}`);
+    parts.push(`Límite lectura: ${fltLimit.value}`);
+    return `Filtros: ${parts.join(" · ")}`;
+  }
+
+  function historialExportMeta(filteredLen) {
+    return {
+      reportTitle: "Historial general de envíos",
+      filtersLine: buildHistorialFiltersLine(),
+      sheetName: "Historial",
+      total: filteredLen
+    };
   }
 
   function buildHistorialStatus(filteredLen, totalLoaded) {
@@ -285,6 +302,43 @@
 
   btnApply.addEventListener("click", load);
   btnRefresh.addEventListener("click", load);
+
+  document.getElementById("btnExportCsv")?.addEventListener?.("click", async () => {
+    try {
+      const filtered = applyClientFilters(dataset);
+      if (!filtered.length) {
+        window.GlsAlert.showAlert(alertEl, { type: "warn", message: "No hay datos para exportar." });
+        return;
+      }
+      const r = await window.GlsExportTabular.exportEnviosList(
+        filtered,
+        "csv",
+        "historial-envios.csv",
+        historialExportMeta(filtered.length)
+      );
+      if (r?.ok && !r.canceled) window.GlsAlert.showAlert(alertEl, { type: "success", message: "CSV exportado." });
+    } catch (e) {
+      window.GlsAlert.showAlert(alertEl, { type: "error", message: e?.message || String(e) });
+    }
+  });
+  document.getElementById("btnExportXlsx")?.addEventListener?.("click", async () => {
+    try {
+      const filtered = applyClientFilters(dataset);
+      if (!filtered.length) {
+        window.GlsAlert.showAlert(alertEl, { type: "warn", message: "No hay datos para exportar." });
+        return;
+      }
+      const r = await window.GlsExportTabular.exportEnviosList(
+        filtered,
+        "xlsx",
+        "historial-envios.xlsx",
+        historialExportMeta(filtered.length)
+      );
+      if (r?.ok && !r.canceled) window.GlsAlert.showAlert(alertEl, { type: "success", message: "Excel exportado." });
+    } catch (e) {
+      window.GlsAlert.showAlert(alertEl, { type: "error", message: e?.message || String(e) });
+    }
+  });
   fltSearch.addEventListener("input", () => {
     const filtered = applyClientFilters(dataset);
     renderTable(filtered);
@@ -312,39 +366,45 @@
       const envio = res.envio;
       const historial = res.historial || [];
 
-      const timelineItems = historial
-        .slice()
-        .reverse()
-        .map((h) => {
-          const evRef = (h.evidenciaReferencia || "").trim();
-          const evDet = (h.evidenciaDetalle || "").trim();
-          const evLine =
-            evRef || evDet
-              ? `<div class="t-obs">Evidencia: <b>${escapeHtml(evRef || "—")}</b>${
-                  evDet ? ` <span class="muted">· ${escapeHtml(evDet)}</span>` : ""
-                }</div>`
-              : "";
-          const por = (h.registradoPor || "").trim();
-          return `
-            <div class="t-item">
-              <div class="t-top">
-                <div class="t-state">${escapeHtml(h.estado || "")}</div>
-                <div class="t-meta mono">${escapeHtml(h.fechaActualizacion || "")}</div>
-              </div>
-              <div class="t-meta">${escapeHtml(h.responsable || "")}${
-                por ? ` · <span class="mono">${escapeHtml(por)}</span>` : ""
-              }</div>
-              ${h.observacion ? `<div class="t-obs">${escapeHtml(h.observacion)}</div>` : ""}
-              ${evLine}
-            </div>
-          `;
-        })
-        .join("");
+      const timelineItems =
+        window.GlsEstadoEnvio?.timelineVerticalHtml?.(historial, []) ||
+        historial
+          .slice()
+          .reverse()
+          .map((h) => `<div class="muted">${escapeHtml(h.estado || "")}</div>`)
+          .join("");
 
       const estados = (estadosRes?.estados || []).map((e) => e.estado || e.nombre || e.id).filter(Boolean);
       const estadoOptions = estados
         .map((e) => `<option value="${escapeHtml(e)}" ${e === envio.estadoActual ? "selected" : ""}>${escapeHtml(e)}</option>`)
         .join("");
+
+      const bloqueActualizarModal = permiteActualizarEstado
+        ? `<div class="card">
+              <div class="card-title">Actualizar estado</div>
+              <div class="form-row">
+                <div class="field"><label>Estado</label><select id="m_estado">${estadoOptions}</select></div>
+                <div class="field"><label>Observación</label><textarea id="m_obs" placeholder="Obligatoria (mín. 3 caracteres). Detalle del cambio..."></textarea></div>
+                <div id="wrapEvidenciaHist" style="display:none">
+                  <div class="field">
+                    <label>Evidencia de entrega (referencia)</label>
+                    <input id="m_evid_ref" maxlength="280" placeholder="Obligatorio si estado Entregado (mín. 4 caracteres)" />
+                  </div>
+                  <div class="field">
+                    <label>Detalle evidencia</label>
+                    <textarea id="m_evid_det" rows="2" placeholder="Opcional"></textarea>
+                  </div>
+                </div>
+                <div class="muted" style="font-size:12px">Entregado requiere referencia de evidencia.</div>
+                <div class="actions">
+                  <button class="btn btn-primary" id="m_save">Guardar</button>
+                </div>
+              </div>
+            </div>`
+        : `<div class="card">
+              <div class="card-title">Actualizar estado</div>
+              <div class="muted">Su rol solo permite consultar. Use operaciones o administrador para cambiar estados.</div>
+            </div>`;
 
       window.GlsModal.openModal({
         title: `Envío ${escapeHtml(envio.codigoEnvio || "")}`,
@@ -355,7 +415,7 @@
               <div class="muted">Origen → Destino</div>
               <div><b>${escapeHtml(envio.origen || "")}</b> → <b>${escapeHtml(envio.destino || "")}</b></div>
               <div style="margin-top:10px" class="muted">Estado actual</div>
-              <div><span class="${badgeForEstado(envio.estadoActual)}">${escapeHtml(envio.estadoActual || "—")}</span></div>
+              <div>${badgeForEstado(envio.estadoActual)}</div>
               ${
                 envio.cotizacionEstimada?.desglose?.totalEstimado != null
                   ? `<div style="margin-top:10px" class="muted">Cotización estimada (registro)</div>
@@ -392,27 +452,7 @@
               }
             </div>
 
-            <div class="card">
-              <div class="card-title">Actualizar estado</div>
-              <div class="form-row">
-                <div class="field"><label>Estado</label><select id="m_estado">${estadoOptions}</select></div>
-                <div class="field"><label>Observación</label><textarea id="m_obs" placeholder="Detalle..."></textarea></div>
-                <div id="wrapEvidenciaHist" style="display:none">
-                  <div class="field">
-                    <label>Evidencia de entrega (referencia)</label>
-                    <input id="m_evid_ref" maxlength="280" placeholder="Obligatorio si estado Entregado (mín. 4 caracteres)" />
-                  </div>
-                  <div class="field">
-                    <label>Detalle evidencia</label>
-                    <textarea id="m_evid_det" rows="2" placeholder="Opcional"></textarea>
-                  </div>
-                </div>
-                <div class="muted" style="font-size:12px">Entregado requiere referencia de evidencia.</div>
-                <div class="actions">
-                  <button class="btn btn-primary" id="m_save">Guardar</button>
-                </div>
-              </div>
-            </div>
+            ${bloqueActualizarModal}
           </div>
 
           <div class="card" style="margin-top:12px">
@@ -420,82 +460,85 @@
             <div class="timeline">${timelineItems || `<div class="muted">Sin historial</div>`}</div>
           </div>
 
-          <div class="actions" style="margin-top:14px; gap:10px; flex-wrap:wrap; padding-top:12px; border-top:1px solid var(--border)">
-            <button type="button" class="btn btn-accent" id="histBtnExportPdf">Exportar PDF (comprobante)</button>
-          </div>
+          <div id="histCmpActions" data-gls-cmp-actions="1" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)"></div>
         `
       });
 
       const overlay = document.querySelector(".modal-overlay:last-of-type");
-      const imgQrSrc = `../assets/qr/${encodeURIComponent(envio.codigoEnvio || code)}.png?ts=${Date.now()}`;
-      overlay.querySelector("#histBtnExportPdf")?.addEventListener("click", () => {
-        if (!window.GlsComprobanteEnvioPdf?.exportComprobantePdf) {
-          window.GlsAlert.showAlert(alertEl, {
-            type: "info",
-            message: "No se cargó el módulo de PDF. Verifique jspdf y comprobante-envio-pdf.js en historial.html."
-          });
-          return;
-        }
-        void window.GlsComprobanteEnvioPdf.exportComprobantePdf({
+      const histCmpRoot = overlay?.querySelector("#histCmpActions");
+      if (histCmpRoot && window.GlsComprobanteEnvio?.bindComprobanteActions) {
+        window.GlsComprobanteEnvio.bindComprobanteActions(histCmpRoot, {
           codigo: envio.codigoEnvio || code,
           envio,
-          imgSrc: imgQrSrc,
+          historial,
           alertEl
         });
-      });
-      const saveBtn = overlay.querySelector("#m_save");
-      const estadoSel = overlay.querySelector("#m_estado");
-      const obs = overlay.querySelector("#m_obs");
-      const wrapEvid = overlay.querySelector("#wrapEvidenciaHist");
-      const evidRef = overlay.querySelector("#m_evid_ref");
-      const evidDet = overlay.querySelector("#m_evid_det");
-
-      function syncEvidenciaVisibility() {
-        const ent = String(estadoSel.value || "").trim() === "Entregado";
-        wrapEvid.style.display = ent ? "" : "none";
       }
-      function onEstadoChange() {
-        syncEvidenciaVisibility();
-        window.GlsAlert.clearAlert(alertEl);
-      }
-      estadoSel.addEventListener("change", onEstadoChange);
-      syncEvidenciaVisibility();
+      if (permiteActualizarEstado) {
+        const saveBtn = overlay.querySelector("#m_save");
+        const estadoSel = overlay.querySelector("#m_estado");
+        const obs = overlay.querySelector("#m_obs");
+        const wrapEvid = overlay.querySelector("#wrapEvidenciaHist");
+        const evidRef = overlay.querySelector("#m_evid_ref");
+        const evidDet = overlay.querySelector("#m_evid_det");
 
-      const MSG_EVIDENCIA_ENTREGADO =
-        "Para estado Entregado indique evidencia de entrega (referencia, mín. 4 caracteres).";
-      evidRef?.addEventListener?.("input", () => window.GlsAlert.clearAlert(alertEl));
-
-      saveBtn.addEventListener("click", async () => {
-        try {
-          window.GlsAlert.clearAlert(alertEl);
-          const estado = String(estadoSel.value || "").trim();
-          const refTrim = String(evidRef?.value ?? "").trim();
-          if (estado === "Entregado" && refTrim.length < 4) {
-            window.GlsAlert.showAlert(alertEl, { type: "error", message: MSG_EVIDENCIA_ENTREGADO });
-            evidRef?.focus?.();
-            return;
+        if (saveBtn && estadoSel && obs && wrapEvid) {
+          function syncEvidenciaVisibility() {
+            const ent = String(estadoSel.value || "").trim() === "Entregado";
+            wrapEvid.style.display = ent ? "" : "none";
           }
-          saveBtn.disabled = true;
-          const r = await window.glsApi.trazabilidad.actualizarEstado({
-            codigoEnvio: envio.codigoEnvio,
-            estado: estadoSel.value,
-            observacion: obs.value,
-            responsable: "Área de operaciones",
-            evidenciaReferencia: evidRef?.value ?? "",
-            evidenciaDetalle: evidDet?.value ?? ""
+          function onEstadoChange() {
+            syncEvidenciaVisibility();
+            window.GlsAlert.clearAlert(alertEl);
+          }
+          estadoSel.addEventListener("change", onEstadoChange);
+          syncEvidenciaVisibility();
+
+          const MSG_EVIDENCIA_ENTREGADO =
+            "Para estado Entregado indique evidencia de entrega (referencia, mín. 4 caracteres).";
+          const MSG_OBS =
+            "La observación es obligatoria (mínimo 3 caracteres) para registrar el cambio de estado.";
+          evidRef?.addEventListener?.("input", () => window.GlsAlert.clearAlert(alertEl));
+
+          saveBtn.addEventListener("click", async () => {
+            try {
+              window.GlsAlert.clearAlert(alertEl);
+              const estado = String(estadoSel.value || "").trim();
+              const obsTrim = String(obs.value || "").trim();
+              if (obsTrim.length < 3) {
+                window.GlsAlert.showAlert(alertEl, { type: "error", message: MSG_OBS });
+                obs.focus();
+                return;
+              }
+              const refTrim = String(evidRef?.value ?? "").trim();
+              if (estado === "Entregado" && refTrim.length < 4) {
+                window.GlsAlert.showAlert(alertEl, { type: "error", message: MSG_EVIDENCIA_ENTREGADO });
+                evidRef?.focus?.();
+                return;
+              }
+              saveBtn.disabled = true;
+              const r = await window.glsApi.trazabilidad.actualizarEstado({
+                codigoEnvio: envio.codigoEnvio,
+                estado: estadoSel.value,
+                observacion: obs.value,
+                responsable: "Área de operaciones",
+                evidenciaReferencia: evidRef?.value ?? "",
+                evidenciaDetalle: evidDet?.value ?? ""
+              });
+              if (!r?.ok) {
+                window.GlsAlert.showAlert(alertEl, { type: "error", message: r?.error || "No se pudo actualizar" });
+                saveBtn.disabled = false;
+                return;
+              }
+              window.GlsModal.dismissOverlay(overlay);
+              await load();
+            } catch (e) {
+              window.GlsAlert.showAlert(alertEl, { type: "error", message: e?.message || String(e) });
+              saveBtn.disabled = false;
+            }
           });
-          if (!r?.ok) {
-            window.GlsAlert.showAlert(alertEl, { type: "error", message: r?.error || "No se pudo actualizar" });
-            saveBtn.disabled = false;
-            return;
-          }
-          window.GlsModal.dismissOverlay(overlay);
-          await load();
-        } catch (e) {
-          window.GlsAlert.showAlert(alertEl, { type: "error", message: e?.message || String(e) });
-          saveBtn.disabled = false;
         }
-      });
+      }
 
       setBusy(false, buildHistorialStatus(applyClientFilters(dataset).length, dataset.length));
     } catch (e) {
@@ -503,6 +546,4 @@
       setBusy(false, "");
     }
   });
-
-  load();
 })();

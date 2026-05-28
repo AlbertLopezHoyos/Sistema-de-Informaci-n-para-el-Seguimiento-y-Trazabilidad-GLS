@@ -12,7 +12,7 @@
    * Modal genérico.
    * - closeOnOverlayClick=false: no cierra al pulsar el fondo oscuro (el ✕ y Escape siguen cerrando).
    */
-  function openModal({ title, bodyHtml, closeOnOverlayClick = true, showHeaderClose = true } = {}) {
+  function openModal({ title, bodyHtml, closeOnOverlayClick = true, showHeaderClose = true, onDismiss } = {}) {
     const mid = `gls-modal-${Date.now().toString(36)}`;
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
@@ -23,7 +23,13 @@
       document.removeEventListener("keydown", onKeyDown);
     }
 
+    overlay._glsOnDismiss = typeof onDismiss === "function" ? onDismiss : null;
+
     function closeModal() {
+      try {
+        overlay._glsOnDismiss?.();
+      } catch (_) {}
+      overlay._glsOnDismiss = null;
       tearDown();
       overlay.remove();
     }
@@ -162,6 +168,10 @@
 
   function dismissOverlay(el) {
     if (!el?.classList?.contains?.("modal-overlay")) return;
+    try {
+      el._glsOnDismiss?.();
+    } catch (_) {}
+    el._glsOnDismiss = null;
     if (typeof el._glsTearDown === "function") el._glsTearDown();
     el.remove();
   }

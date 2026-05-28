@@ -1,6 +1,7 @@
 const { initializeApp, getApps } = require("firebase/app");
 const {
   getFirestore,
+  initializeFirestore,
   serverTimestamp,
   Timestamp,
   doc,
@@ -19,6 +20,7 @@ const {
   deleteDoc,
   writeBatch
 } = require("firebase/firestore");
+const { getStorage } = require("firebase/storage");
 
 function requireEnv(name) {
   const v = process.env[name];
@@ -41,13 +43,41 @@ function getFirebaseApp() {
   return initializeApp(firebaseConfig);
 }
 
+let dbInstance = null;
+
 function getDb() {
-  return getFirestore(getFirebaseApp());
+  if (dbInstance) return dbInstance;
+  const app = getFirebaseApp();
+  const useLongPolling = String(process.env.FIRESTORE_LONG_POLLING || "1") !== "0";
+  try {
+    dbInstance = initializeFirestore(app, {
+      experimentalForceLongPolling: useLongPolling
+    });
+  } catch {
+    dbInstance = getFirestore(app);
+  }
+  return dbInstance;
+}
+
+function isStorageConfigured() {
+  const bucket = String(process.env.FIREBASE_STORAGE_BUCKET || "").trim();
+  return bucket.length > 0 && !/^REEMPLAZAR$/i.test(bucket);
+}
+
+function getFirebaseStorage() {
+  const app = getFirebaseApp();
+  if (!isStorageConfigured()) {
+    throw new Error("Configure FIREBASE_STORAGE_BUCKET en .env para subir evidencias a Storage.");
+  }
+  const bucket = process.env.FIREBASE_STORAGE_BUCKET.trim();
+  return getStorage(app, `gs://${bucket.replace(/^gs:\/\//, "")}`);
 }
 
 module.exports = {
   getFirebaseApp,
   getDb,
+  isStorageConfigured,
+  getFirebaseStorage,
   serverTimestamp,
   Timestamp,
   doc,

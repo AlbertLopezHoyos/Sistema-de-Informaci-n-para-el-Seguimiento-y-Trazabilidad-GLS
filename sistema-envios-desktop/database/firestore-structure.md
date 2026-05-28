@@ -12,6 +12,7 @@ Este proyecto usa Firestore con las siguientes colecciones:
 - `qr_envios`
 - `counters` — consecutivo de códigos de envío por año (`ENV-YYYY`)
 - `meta` — metadatos de seed (`meta/seed`)
+- `logs_sistema` — auditoría (usuario, rol, accion, fecha, detalles). Ver `docs/modulo-auditoria-seguridad-exportacion.md`
 
 ## Módulo de registro de envíos (flujo al guardar)
 

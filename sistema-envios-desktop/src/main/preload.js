@@ -1,19 +1,28 @@
+/**
+ * Puente seguro renderer ↔ main (contextIsolation).
+ * Todas las llamadas pasan por invoke(channel, payload).
+ */
 const { contextBridge, ipcRenderer } = require("electron");
 
 function invoke(channel, payload) {
   return ipcRenderer.invoke(channel, payload);
 }
 
+/** Suscripción IPC: elimina solo el listener registrado (evita removeAllListeners). */
 function on(channel, handler) {
-  ipcRenderer.on(channel, (_evt, data) => handler(data));
-  return () => ipcRenderer.removeAllListeners(channel);
+  const wrapped = (_evt, data) => handler(data);
+  ipcRenderer.on(channel, wrapped);
+  return () => ipcRenderer.removeListener(channel, wrapped);
 }
 
 contextBridge.exposeInMainWorld("glsApi", {
   app: {
     ping: () => invoke("app:ping"),
+    getFeatures: () => invoke("app:getFeatures"),
     getCotizacionDefaults: () => invoke("app:getCotizacionDefaults"),
-    savePdfFile: (payload) => invoke("app:savePdfFile", payload || {})
+    savePdfFile: (payload) => invoke("app:savePdfFile", payload || {}),
+    exportHtmlToPdf: (payload) => invoke("app:exportHtmlToPdf", payload || {}),
+    saveExportFile: (payload) => invoke("app:saveExportFile", payload || {})
   },
   auth: {
     policy: () => invoke("auth:policy"),
@@ -21,6 +30,7 @@ contextBridge.exposeInMainWorld("glsApi", {
     login: (payload) => invoke("auth:login", payload),
     register: (payload) => invoke("auth:register", payload),
     logout: () => invoke("auth:logout"),
+    touchSession: () => invoke("auth:touchSession"),
     listUsers: () => invoke("auth:listUsers"),
     inviteUser: (payload) => invoke("auth:inviteUser", payload),
     setActivo: (payload) => invoke("auth:setActivo", payload)
@@ -54,7 +64,25 @@ contextBridge.exposeInMainWorld("glsApi", {
   geolocalizacionQr: {
     buscar: (codigoEnvio) => invoke("geo:buscar", { codigoEnvio }),
     registrarUbicacion: (payload) => invoke("geo:registrarUbicacion", payload),
-    generarQr: (codigoEnvio) => invoke("geo:generarQr", { codigoEnvio })
+    generarQr: (codigoEnvio) => invoke("geo:generarQr", { codigoEnvio }),
+    qrEtiquetaHtml: (codigoEnvio) => invoke("geo:qrEtiquetaHtml", { codigoEnvio })
+  },
+  consulta: {
+    leerCodigoPdf: (payload) => invoke("consulta:leerCodigoPdf", payload)
+  },
+  export: {
+    buildEnvios: (payload) => invoke("export:buildEnvios", payload || {}),
+    buildFromRows: (payload) => invoke("export:buildFromRows", payload || {})
+  },
+  reportes: {
+    consultar: (payload) => invoke("reportes:consultar", payload || {})
+  },
+  auditoria: {
+    listar: (payload) => invoke("auditoria:listar", payload || {})
+  },
+  backup: {
+    exportar: () => invoke("backup:exportar"),
+    importar: (backup) => invoke("backup:importar", { backup })
   }
 });
 

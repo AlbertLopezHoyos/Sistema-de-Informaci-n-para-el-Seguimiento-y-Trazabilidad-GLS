@@ -6,8 +6,13 @@
     { id: "consultaqr", label: "Consulta envío", file: "consulta-envio.html" },
     { id: "seguimiento", label: "Seguimiento / Trazabilidad", file: "seguimiento-envio.html" },
     { id: "historial", label: "Historial general", file: "historial.html" },
-    { id: "geo", label: "Geolocalización + QR", file: "geolocalizacion-qr.html" },
-    { id: "usuarios", label: "Usuarios (admin)", file: "usuarios.html" }
+    { id: "reportes", label: "Reportes", file: "reportes.html" },
+    { id: "geo", label: "Geolocalización + QR", file: "geolocalizacion-qr.html" }
+  ];
+
+  const adminPages = [
+    { id: "usuarios", label: "Usuarios", file: "usuarios.html", desc: "Gestión de cuentas" },
+    { id: "backup", label: "Respaldo", file: "backup.html", desc: "Exportar / restaurar datos" }
   ];
 
   function escapeHtml(s) {
@@ -19,7 +24,13 @@
       .replaceAll("'", "&#039;");
   }
 
-  /** Misma imagen que login/signup (`pages/` → `../assets/img/`). */
+  function userInitials(u) {
+    const n = String(u?.nombres || u?.email || "U").trim();
+    const parts = n.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return n.slice(0, 2).toUpperCase();
+  }
+
   const BRAND_LOGO_SRC = "../assets/img/logo.png";
 
   function renderMenu(activeId) {
@@ -44,17 +55,19 @@
               <div class="brand-subtitle">Operaciones · Trazabilidad</div>
             </div>
           </div>
-          <nav class="side-nav">${items}</nav>
+          <nav class="side-nav" aria-label="Menú principal">${items}</nav>
           <div class="side-footer">
             <div id="glsUserMini" class="side-user-mini muted-on-dark"></div>
-            <button id="glsBtnLogout" class="btn btn-ghost w-100 nav-logout" type="button">Salir</button>
+            <button id="glsBtnLogout" class="btn nav-logout w-100" type="button">
+              <span class="nav-logout-ico" aria-hidden="true">⎋</span>
+              <span>Salir</span>
+            </button>
           </div>
         </aside>
       </div>
     `;
   }
 
-  /** Botón hamburguesa (DOM) — se monta en la topbar del módulo (derecha), no en el sidebar. */
   function createNavToggleButton() {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -73,30 +86,16 @@
     return btn;
   }
 
-  /** Colapsa / expande el panel lateral; el control vive en .topbar-inner (área del módulo). */
   function mountNavToggle() {
     const root = document.getElementById("app");
-    const inner = document.querySelector("main.main .topbar-inner");
-    if (!root || !inner) return;
+    const leftMount = document.getElementById("glsTopbarNavToggleMount");
+    if (!root || !leftMount) return;
 
-    let btn = document.getElementById("glsNavToggle");
-    if (!btn) {
-      const pill = inner.querySelector(".area-pill");
-      if (pill && !inner.querySelector(".topbar-right")) {
-        const right = document.createElement("div");
-        right.className = "topbar-right";
-        pill.replaceWith(right);
-        right.appendChild(pill);
-        right.appendChild(createNavToggleButton());
-      } else if (!inner.querySelector("#glsNavToggle")) {
-        const wrap = document.createElement("div");
-        wrap.className = "topbar-nav-toggle-wrap topbar-nav-toggle-wrap--solo";
-        wrap.appendChild(createNavToggleButton());
-        inner.appendChild(wrap);
-      }
-      btn = document.getElementById("glsNavToggle");
+    if (!document.getElementById("glsNavToggle")) {
+      leftMount.appendChild(createNavToggleButton());
     }
 
+    const btn = document.getElementById("glsNavToggle");
     if (!btn || btn.dataset.glsNavBound === "1") return;
     btn.dataset.glsNavBound = "1";
 
@@ -121,30 +120,128 @@
     });
   }
 
+  let profileDocumentListenersBound = false;
+
+  function closeProfileMenu() {
+    const menu = document.getElementById("glsProfileMenu");
+    const btn = document.getElementById("glsProfileBtn");
+    if (menu) menu.hidden = true;
+    if (btn) btn.setAttribute("aria-expanded", "false");
+  }
+
+  function bindProfileDocumentListenersOnce() {
+    if (profileDocumentListenersBound) return;
+    profileDocumentListenersBound = true;
+    document.addEventListener("click", (e) => {
+      if (!document.getElementById("glsProfileWrap")?.contains(e.target)) closeProfileMenu();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeProfileMenu();
+    });
+  }
+
+  function mountProfileMenu(user, isAdmin) {
+    const mount = document.getElementById("glsTopbarProfileMount");
+    if (!mount) return;
+
+    const name = user?.nombres || user?.email || "Usuario";
+    const email = user?.email || "";
+    const rol = user?.rol ? String(user.rol) : "";
+    const initials = userInitials(user);
+
+    const adminItems = adminPages
+      .map(
+        (p) => `<a class="topbar-profile-item" href="./${escapeHtml(p.file)}" data-admin-only="1">
+          <span class="topbar-profile-item-title">${escapeHtml(p.label)}</span>
+          <span class="topbar-profile-item-desc">${escapeHtml(p.desc)}</span>
+        </a>`
+      )
+      .join("");
+
+    mount.innerHTML = `
+      <div class="topbar-profile-wrap" id="glsProfileWrap">
+        <button type="button" class="topbar-profile-btn" id="glsProfileBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="glsProfileMenu">
+          <span class="topbar-profile-avatar" aria-hidden="true">${escapeHtml(initials)}</span>
+          <span class="topbar-profile-label">
+            <span class="topbar-profile-name">${escapeHtml(name)}</span>
+            ${rol ? `<span class="topbar-profile-rol">${escapeHtml(rol)}</span>` : ""}
+          </span>
+          <span class="topbar-profile-chevron" aria-hidden="true">▾</span>
+        </button>
+        <div class="topbar-profile-menu" id="glsProfileMenu" role="menu" hidden>
+          <div class="topbar-profile-menu-head">
+            <div class="topbar-profile-menu-name">${escapeHtml(name)}</div>
+            ${email ? `<div class="topbar-profile-menu-email">${escapeHtml(email)}</div>` : ""}
+            ${rol ? `<div class="topbar-profile-menu-rol">${escapeHtml(rol)}</div>` : ""}
+          </div>
+          <div class="topbar-profile-menu-section" id="glsProfileAdminSection" style="display:${isAdmin ? "" : "none"}">
+            <div class="topbar-profile-menu-section-title">Administración</div>
+            ${adminItems}
+          </div>
+        </div>
+      </div>`;
+
+    const btn = document.getElementById("glsProfileBtn");
+    const menu = document.getElementById("glsProfileMenu");
+    if (!btn || !menu || btn.dataset.glsProfileBound === "1") return;
+    btn.dataset.glsProfileBound = "1";
+
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const open = menu.hidden;
+      if (open) {
+        menu.hidden = false;
+        btn.setAttribute("aria-expanded", "true");
+      } else {
+        closeProfileMenu();
+      }
+    });
+
+    bindProfileDocumentListenersOnce();
+  }
+
   async function mountAuthMenu() {
     mountNavToggle();
     const userEl = document.getElementById("glsUserMini");
     const btn = document.getElementById("glsBtnLogout");
     if (!btn) return;
+
+    let user = null;
+    let isAdmin = false;
+
     try {
       const me = await window.glsApi.auth.me();
-      const u = me?.user;
+      user = me?.user;
+      const r = String(user?.rol || "").toLowerCase();
+      isAdmin = r === "admin";
+
       if (userEl) {
-        const rol = u?.rol ? ` · ${u.rol}` : "";
-        userEl.textContent = u?.email ? `Sesión: ${u.nombres ? `${u.nombres} · ` : ""}${u.email}${rol}` : "Sesión: —";
+        const rol = user?.rol ? ` · ${user.rol}` : "";
+        userEl.textContent = user?.email
+          ? `Sesión: ${user.nombres ? `${user.nombres} · ` : ""}${user.email}${rol}`
+          : "Sesión: —";
       }
+
+      document.querySelectorAll('.side-nav a[href="./registro-envio.html"]').forEach((a) => {
+        a.style.display = r === "consulta" ? "none" : "";
+      });
     } catch {
       if (userEl) userEl.textContent = "Sesión: —";
     }
-    btn.addEventListener("click", async () => {
-      try {
-        await window.glsApi.auth.logout();
-      } finally {
-        window.location.href = "./login.html";
-      }
-    });
+
+    mountProfileMenu(user, isAdmin);
+
+    if (btn.dataset.glsLogoutBound !== "1") {
+      btn.dataset.glsLogoutBound = "1";
+      btn.addEventListener("click", async () => {
+        try {
+          await window.glsApi.auth.logout();
+        } finally {
+          window.location.href = "./login.html";
+        }
+      });
+    }
   }
 
-  window.GlsMenu = { renderMenu, mountAuthMenu };
+  window.GlsMenu = { renderMenu, mountAuthMenu, adminPages };
 })();
-

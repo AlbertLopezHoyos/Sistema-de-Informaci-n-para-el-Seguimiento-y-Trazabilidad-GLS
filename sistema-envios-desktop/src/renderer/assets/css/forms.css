@@ -1,3 +1,8 @@
+/**
+ * Formularios extendidos (pestañas registro, etc.).
+ * Estilo base de inputs: variables --control-* y reglas en styles.css (Registro de envíos).
+ */
+
 .section-title{
   font-weight:900;
   margin:0 0 8px;
@@ -107,6 +112,16 @@
   padding:6px 12px 0;
   min-height:1.35em;
 }
+
+.registro-tab-footer .actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#btnGuardar[hidden] {
+  display: none !important;
+}
+
 .registro-tabpanel{
   padding:12px 12px 14px;
   animation: registro-tab-in .2s ease-out;
@@ -120,5 +135,25 @@
 }
 @media (prefers-reduced-motion: reduce){
   .registro-tabpanel{ animation:none; }
+}
+
+/* Detalle de cliente en modal (solo lectura) */
+.gls-dl-readonly{
+  margin:0;
+  display:grid;
+  gap:10px 14px;
+  grid-template-columns: minmax(120px, 160px) 1fr;
+}
+.gls-dl-readonly dt{
+  margin:0;
+  font-size:12px;
+  font-weight:700;
+  color:var(--muted);
+}
+.gls-dl-readonly dd{
+  margin:0;
+  font-size:14px;
+  color:var(--text);
+  word-break: break-word;
 }
 

@@ -1,6 +1,6 @@
 {
   "name": "sistema-envios-desktop",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Sistema de Información para el Seguimiento y Trazabilidad de Envíos (Electron + Firebase Firestore)",
   "main": "src/main/main.js",
   "author": "GRUPO LOGÍSTICO SALAZAR S.A.C.",
@@ -9,6 +9,9 @@
     "start": "electron .",
     "dev": "electron .",
     "test": "jest",
+    "verify": "node scripts/verify-consistency.js",
+    "dist": "electron-builder --win",
+    "dist:dir": "electron-builder --win --dir",
     "db:ping": "node database/scripts/00-check-firebase.js",
     "seed:init": "node database/scripts/run-seed.js",
     "seed:reset": "node database/scripts/05-reset-data.js",
@@ -16,14 +19,72 @@
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
+    "chart.js": "^4.5.1",
     "dotenv": "^16.6.1",
     "electron": "^37.2.5",
+    "exceljs": "^4.4.0",
     "firebase": "^12.12.1",
     "jspdf": "^2.5.2",
+    "jsqr": "^1.4.0",
     "leaflet": "^1.9.4",
-    "qrcode": "^1.5.4"
+    "pdf-parse": "^2.4.5",
+    "pdfjs-dist": "^5.7.284",
+    "qrcode": "^1.5.4",
+    "sharp": "^0.34.2",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "core-util-is": "^1.0.3",
+    "electron-builder": "^26.8.1",
     "jest": "^30.0.5"
+  },
+  "build": {
+    "appId": "com.gls.envios.desktop",
+    "productName": "GLS Envíos",
+    "copyright": "GRUPO LOGÍSTICO SALAZAR S.A.C.",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json",
+      "!**/*.md",
+      "!tests/**",
+      "!database/**"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "**/node_modules/sharp/**/*",
+      "**/node_modules/@img/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": ".env.example",
+        "to": "gls.env.example",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "GLS-Envios-Setup-${version}.${ext}",
+      "publisherName": "GRUPO LOGÍSTICO SALAZAR S.A.C."
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "GLS Envíos — Salazar",
+      "installerIcon": "build/icon.png",
+      "uninstallerIcon": "build/icon.png",
+      "installerHeaderIcon": "build/icon.png",
+      "deleteAppDataOnUninstall": false,
+      "license": "build/license.txt"
+    }
   }
 }

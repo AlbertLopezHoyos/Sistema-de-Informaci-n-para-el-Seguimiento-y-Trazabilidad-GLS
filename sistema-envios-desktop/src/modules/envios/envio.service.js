@@ -5,6 +5,7 @@ const { areaResponsableDefault } = require("../../config/app.config");
 const { nowIso } = require("../../utils/fechas");
 const { getYear, formatCodigoEnvio } = require("../../utils/codigoEnvio");
 const { generateQrPng } = require("../../utils/qrGenerator");
+const { buildQrDeepLink } = require("../../utils/qrDeepLink");
 const { buildEnvioDraft, buildDimensiones, buildCotizacionInput } = require("./envio.model");
 const { requiredNumber } = require("../../utils/validaciones");
 const { calcularCotizacion } = require("../../utils/cotizacionEnvio");
@@ -142,8 +143,9 @@ async function crearEnvio(payload) {
   });
 
   const { absolute, rutaLocalQr } = getQrOutputPaths(codigoEnvio);
+  const contenidoQr = buildQrDeepLink(codigoEnvio);
   try {
-    await generateQrPng({ content: codigoEnvio, outputFilePath: absolute });
+    await generateQrPng({ content: contenidoQr, outputFilePath: absolute });
   } catch (err) {
     throw new Error(
       `El envío ${codigoEnvio} se guardó correctamente, pero falló la generación del QR en disco: ${err?.message || String(
@@ -158,7 +160,7 @@ async function crearEnvio(payload) {
       qrRef,
       {
         codigoEnvio,
-        contenidoQr: codigoEnvio,
+        contenidoQr,
         rutaLocalQr,
         fechaGeneracion: nowIso()
       },

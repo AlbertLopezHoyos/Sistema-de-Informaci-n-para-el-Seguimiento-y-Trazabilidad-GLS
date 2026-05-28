@@ -26,9 +26,22 @@
   estado: "En tránsito",
   fechaActualizacion: "ISO",
   observacion: "El envío salió del almacén",
-  responsable: "Área de operaciones"
+  responsable: "Área de operaciones",
+  // Entrega (opcional):
+  evidenciaReferencia: "GUÍA-123",
+  evidenciaImagenUrl: "https://firebasestorage.../evidencia.jpg",
+  evidenciaNombreArchivo: "entrega.jpg",
+  evidenciaFechaSubida: "ISO",
+  // Legacy (solo lectura en registros antiguos):
+  evidenciaImagenBase64: "data:image/jpeg;base64,..."
 }
 ```
+
+### Firebase Storage — evidencias de entrega
+
+Ruta: `uploads/evidencias/{codigoEnvio}/{nombreArchivo}`
+
+Validación: JPG/PNG/WEBP, máximo 5 MB. El renderer envía data URL por IPC; el proceso main sube a Storage y persiste solo URL + metadatos en Firestore.
 
 ## `ubicaciones_envios/{codigoEnvio}__{fechaISO}`
 

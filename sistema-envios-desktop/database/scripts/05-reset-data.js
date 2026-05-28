@@ -28,7 +28,8 @@ async function reset() {
     "usuarios_auth",
     "usuarios",
     "counters",
-    "meta"
+    "meta",
+    "logs_sistema"
   ];
 
   for (const c of collections) {

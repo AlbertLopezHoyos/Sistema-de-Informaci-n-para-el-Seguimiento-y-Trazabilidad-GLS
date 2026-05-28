@@ -51,21 +51,72 @@ async function listEnviosHistorial({ estado = "Todos", limitCount = 800 } = {}) 
   return items;
 }
 
+function isTransientFirestoreError(err) {
+  const msg = String(err?.message || err || "").toLowerCase();
+  const code = String(err?.code || "");
+  return (
+    code === "unavailable" ||
+    code === "deadline-exceeded" ||
+    /econnreset|unavailable|network|socket|aborted|internal|stream.*error/i.test(msg)
+  );
+}
+
 function subscribeEnviosActivos({ limitCount = 200, onData, onError } = {}) {
   const activos = new Set(["Registrado", "En tránsito", "En reparto", "Observado"]);
   const take = Math.min(Math.max(Number(limitCount) * 6, 400), 2000);
   const q = query(enviosCol(), orderBy("fechaRegistro", "desc"), limit(take));
-  return onSnapshot(
-    q,
-    (snap) => {
-      const items = snap.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
-        .filter((e) => activos.has(e.estadoActual || ""))
-        .slice(0, limitCount);
-      onData?.(items);
-    },
-    (err) => onError?.(err)
-  );
+
+  let unsub = null;
+  let cancelled = false;
+  let retryCount = 0;
+  const maxRetries = 10;
+
+  function mapSnap(snap) {
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((e) => activos.has(e.estadoActual || ""))
+      .slice(0, limitCount);
+  }
+
+  function attach() {
+    unsub = onSnapshot(
+      q,
+      (snap) => {
+        retryCount = 0;
+        onData?.(mapSnap(snap));
+      },
+      (err) => {
+        if (cancelled) return;
+        if (isTransientFirestoreError(err) && retryCount < maxRetries) {
+          retryCount += 1;
+          const delayMs = Math.min(15000, 800 * retryCount);
+          console.warn(
+            `[GLS] Firestore Listen reconectando (${retryCount}/${maxRetries}) en ${delayMs}ms:`,
+            err?.message || err
+          );
+          try {
+            unsub?.();
+          } catch {}
+          unsub = null;
+          setTimeout(() => {
+            if (!cancelled) attach();
+          }, delayMs);
+          return;
+        }
+        onError?.(err);
+      }
+    );
+  }
+
+  attach();
+
+  return () => {
+    cancelled = true;
+    try {
+      unsub?.();
+    } catch {}
+    unsub = null;
+  };
 }
 
 async function findEnvioByCodigo(codigoEnvio) {

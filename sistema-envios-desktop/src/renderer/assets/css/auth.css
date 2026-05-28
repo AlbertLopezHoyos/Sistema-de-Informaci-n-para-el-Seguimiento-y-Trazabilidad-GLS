@@ -158,18 +158,38 @@ body{
   margin: 0 0 6px;
   font-weight: 900;
 }
-.auth-form input, .auth-form select{
+.auth-form input,
+.auth-form select{
   width:100%;
-  background: rgba(255,255,255,.92);
-  border: 1px solid rgba(122, 40, 40, .22);
-  border-radius: 14px;
-  padding: 12px 12px;
-  outline: none;
-  font-size: 13px;
+  min-height:var(--control-height, 40px);
+  padding:var(--control-pad-y, 9px) var(--control-pad-x, 12px);
+  border-radius:var(--control-radius, 10px);
+  border:var(--control-border, 1px solid rgba(15, 23, 42, 0.12));
+  background:var(--control-bg, #fff);
+  color:var(--text, #0f172a);
+  outline:none;
+  font-size:var(--control-font-size, 13px);
+  font-family:inherit;
+  box-sizing:border-box;
+  transition:border-color .15s ease, box-shadow .15s ease;
 }
-.auth-form input:focus, .auth-form select:focus{
-  border-color: rgba(185, 56, 56, .55);
-  box-shadow: 0 0 0 3px rgba(245, 124, 0, .16);
+.auth-form input::placeholder{
+  color:var(--control-placeholder, #7b869b);
+  opacity:1;
+}
+.auth-form select{
+  appearance:none;
+  -webkit-appearance:none;
+  padding-right:34px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 9l6 6 6-6' stroke='%235b667a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 12px center;
+  background-size:12px;
+}
+.auth-form input:focus,
+.auth-form select:focus{
+  border-color:var(--control-focus-border, rgba(122, 40, 40, 0.55));
+  box-shadow:var(--control-focus-shadow, 0 0 0 4px rgba(122, 40, 40, 0.1));
 }
 
 .auth-actions{

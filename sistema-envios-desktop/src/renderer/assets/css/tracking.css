@@ -180,6 +180,17 @@
 .state-pill-ico{ font-size:14px; }
 
 /* KPI seguimiento */
+/* Seguimiento: lista activos + detalle */
+.seguimiento-layout{
+  grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
+  align-items: start;
+}
+@media (max-width: 900px){
+  .seguimiento-layout{
+    grid-template-columns: 1fr;
+  }
+}
+
 .seg-kpi-strip{ margin-bottom:10px; }
 .seg-kpi{
   padding:12px; border-radius:14px; border:1px solid var(--border);

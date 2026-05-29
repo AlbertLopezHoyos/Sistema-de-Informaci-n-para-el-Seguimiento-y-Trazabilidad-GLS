@@ -118,6 +118,16 @@
     } catch {}
   })();
 
+  try {
+    const expired = new URLSearchParams(window.location.search).get("expired");
+    if (expired === "1") {
+      setAlert(
+        "warn",
+        "Su sesión expiró por inactividad. Inicie sesión nuevamente para continuar."
+      );
+    }
+  } catch {}
+
   redirectIfLogged();
 })();
 

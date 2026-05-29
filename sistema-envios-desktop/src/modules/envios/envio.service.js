@@ -15,7 +15,8 @@ const {
   countersDocRef,
   listEnviosActivos,
   listEnviosHistorial,
-  subscribeEnviosActivos
+  subscribeEnviosActivos,
+  buscarParteEnEnviosPorDocumento
 } = require("./envio.repository");
 
 const clienteRepo = require("../clientes/cliente.repository");
@@ -188,6 +189,20 @@ async function listarHistorial(opts) {
   return { ok: true, envios };
 }
 
+/** Remitente o destinatario que ya participó en algún envío (datos del último envío encontrado). */
+async function buscarPartePorDocumento({ documento, rol, limitScan } = {}) {
+  const r = await buscarParteEnEnviosPorDocumento({ documento, rol, limitScan });
+  if (r?.error) return { ok: false, error: r.error };
+  if (!r?.found || !r.parte) {
+    const etiqueta = rol === "destinatario" ? "destinatario" : "remitente";
+    return {
+      ok: false,
+      error: `No hay envíos anteriores con ese documento como ${etiqueta}. Complete los datos manualmente.`
+    };
+  }
+  return { ok: true, parte: r.parte };
+}
+
 function suscribirseActivos({ limitCount, onData, onError }) {
   return subscribeEnviosActivos({ limitCount, onData, onError });
 }
@@ -199,6 +214,7 @@ module.exports = {
   generarCodigoEnvioConsecutivo,
   listarActivos,
   listarHistorial,
+  buscarPartePorDocumento,
   suscribirseActivos
 };
 

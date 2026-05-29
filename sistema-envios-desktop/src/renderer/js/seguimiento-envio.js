@@ -50,13 +50,13 @@
               '<a href="./consulta-envio.html">Vista consulta</a> · <a href="./geolocalizacion-qr.html">Mapa y QR</a>'
           }) || ""}
         </div>
-        <section class="envio-otros-registros u-mt-md" aria-label="Otros registros">
+        <section id="segOtrosRegistros" class="envio-otros-registros u-mt-md" aria-label="Otros registros">
           <div class="envio-otros-registros-title">Otros registros</div>
           <div id="segQuickList" class="envio-quick-list-wrap u-mt-sm"></div>
         </section>
       </div>
 
-      <div class="grid" style="grid-template-columns: 420px 1fr; align-items:start">
+      <div class="grid seguimiento-layout">
         <div class="card">
           <div class="card-title">Envíos activos (tiempo real)</div>
           <div class="card-subtitle">Se muestran automáticamente: Registrado, En almacén, En tránsito, En reparto, Observado.</div>
@@ -99,6 +99,7 @@
   const statusEl = document.getElementById("status");
 
   const quickListEl = document.getElementById("segQuickList");
+  const otrosRegistrosEl = document.getElementById("segOtrosRegistros");
   const busquedaUi = window.GlsEnvioBusquedaRapida?.wireBusquedaPanel?.(document.getElementById("segBusquedaMount"), {
     idPrefix: "seg"
   });
@@ -244,10 +245,13 @@
     busquedaUi?.setBusquedaActiva?.(activa);
   }
 
+  const BX = () => window.GlsEnvioBusquedaRapida;
+
   function refreshOtrosRegistros(excludeCodigo, patch = {}) {
+    BX()?.setSeccionOtrosRegistrosVisible?.(otrosRegistrosEl, true);
     codigoBusquedaActiva = excludeCodigo || "";
     const criterios = busquedaUi?.getCriterios?.() || {};
-    void window.GlsEnvioBusquedaRapida?.refreshRegistrosRapidos?.(quickListEl, {
+    void BX()?.refreshRegistrosRapidos?.(quickListEl, {
       excludeCodigo: codigoBusquedaActiva,
       criterios,
       ...patch
@@ -264,7 +268,7 @@
     codigoBusquedaActiva = "";
     marcarBusquedaActiva(false);
     busquedaUi?.setBusy?.(false, "");
-    await window.GlsEnvioBusquedaRapida?.cargarTodosLosRegistros?.(quickListEl);
+    BX()?.limpiarSeccionOtrosRegistros?.(quickListEl, otrosRegistrosEl);
   }
 
   function setBusy(busy, text) {
@@ -871,11 +875,18 @@
 
   async function buscar() {
     window.GlsAlert.clearAlert(alertEl);
-    const BX = window.GlsEnvioBusquedaRapida;
+    const busquedaMod = BX();
+    if (!busquedaMod?.resolverBusqueda) {
+      window.GlsAlert.showAlert(alertEl, {
+        type: "error",
+        message: "Módulo de búsqueda no disponible. Recargue la página (F5)."
+      });
+      return;
+    }
     const criterios = busquedaUi?.getCriterios?.() || {};
     busquedaUi?.setBusy?.(true, "Buscando…");
     try {
-      const res = await BX.resolverBusqueda(criterios);
+      const res = await busquedaMod.resolverBusqueda(criterios);
       if (res.tipo === "codigo") {
         await buscarPorCodigo(res.codigo);
         return;
@@ -901,7 +912,7 @@
     const QD = window.GlsQrDecode;
     busquedaUi?.setBusy?.(true, QD?.isPdfFile?.(file) ? "Leyendo PDF…" : "Leyendo imagen…");
     try {
-      const { codigo } = await window.GlsEnvioBusquedaRapida.leerCodigoDesdeArchivo(file);
+      const { codigo } = (await window.GlsEnvioBusquedaRapida?.leerCodigoDesdeArchivo?.(file)) || {};
       if (!codigo) throw new Error("No se detectó un código ENV en el archivo.");
       await buscarPorCodigo(codigo);
     } catch (e) {
@@ -966,11 +977,11 @@
 
   busquedaUi?.btnBuscar?.addEventListener("click", () => void buscar());
   busquedaUi?.btnLimpiar?.addEventListener("click", () => void limpiarBusqueda());
-  busquedaUi?.btnQr?.addEventListener("click", () => busquedaUi.qrFile?.click());
+  busquedaUi?.btnQr?.addEventListener("click", () => busquedaUi?.qrFile?.click());
   busquedaUi?.qrFile?.addEventListener("change", () => {
-    const f = busquedaUi.qrFile.files?.[0];
+    const f = busquedaUi?.qrFile?.files?.[0];
     if (f) void leerArchivoYBuscar(f);
-    busquedaUi.qrFile.value = "";
+    if (busquedaUi?.qrFile) busquedaUi.qrFile.value = "";
   });
   [busquedaUi?.inputCodigo, busquedaUi?.inputCliente, busquedaUi?.selectEstado].forEach((el) => {
     el?.addEventListener("keydown", (ev) => {
@@ -1027,9 +1038,10 @@
       renderLista();
 
       if (saltarAutoSeleccionPrimero) return;
-      // Auto-selección del primero si no hay detalle cargado
-      if (!resultEl.innerHTML.trim() && enviosActivos.length) {
-        buscarPorCodigo(enviosActivos[0].codigoEnvio);
+      // Solo auto-abrir detalle si llegó por deep link (?codigo=), no al cargar la lista
+      if (CODIGO_DESDE_URL && !resultEl.innerHTML.trim() && enviosActivos.length) {
+        const match = enviosActivos.find((e) => e.codigoEnvio === CODIGO_DESDE_URL);
+        if (match) void buscarPorCodigo(match.codigoEnvio);
       }
     }, 200);
   }

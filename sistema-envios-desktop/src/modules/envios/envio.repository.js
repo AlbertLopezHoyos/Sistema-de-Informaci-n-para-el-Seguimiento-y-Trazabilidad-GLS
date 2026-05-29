@@ -29,9 +29,18 @@ function countersDocRef(counterId) {
   return doc(getDb(), "counters", counterId);
 }
 
+/** Estados que aparecen en Seguimiento (tiempo real), alineado con UI y app.config. */
+const ESTADOS_ACTIVOS = new Set([
+  "Registrado",
+  "En almacén",
+  "En tránsito",
+  "En reparto",
+  "Observado"
+]);
+
 async function listEnviosActivos({ limitCount = 200 } = {}) {
   // Sin `where in` + orderBy (evita índice compuesto). Se lee por fecha y se filtra en memoria.
-  const activos = new Set(["Registrado", "En tránsito", "En reparto", "Observado"]);
+  const activos = ESTADOS_ACTIVOS;
   const take = Math.min(Math.max(Number(limitCount) * 6, 400), 2000);
   const snap = await getDocs(query(enviosCol(), orderBy("fechaRegistro", "desc"), limit(take)));
   const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((e) => activos.has(e.estadoActual || ""));
@@ -62,7 +71,7 @@ function isTransientFirestoreError(err) {
 }
 
 function subscribeEnviosActivos({ limitCount = 200, onData, onError } = {}) {
-  const activos = new Set(["Registrado", "En tránsito", "En reparto", "Observado"]);
+  const activos = ESTADOS_ACTIVOS;
   const take = Math.min(Math.max(Number(limitCount) * 6, 400), 2000);
   const q = query(enviosCol(), orderBy("fechaRegistro", "desc"), limit(take));
 
@@ -119,6 +128,53 @@ function subscribeEnviosActivos({ limitCount = 200, onData, onError } = {}) {
   };
 }
 
+function normalizeDocumentoBusqueda(documento) {
+  return String(documento || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+}
+
+/**
+ * Busca remitente o destinatario por documento en envíos ya registrados (más reciente primero).
+ * @param {{ documento: string, rol: 'remitente'|'destinatario', limitScan?: number }} opts
+ */
+async function buscarParteEnEnviosPorDocumento({ documento, rol = "remitente", limitScan = 2000 } = {}) {
+  const docNorm = normalizeDocumentoBusqueda(documento);
+  if (!docNorm || docNorm.length < 6) {
+    return { found: false, error: "Documento inválido para búsqueda." };
+  }
+  if (rol !== "remitente" && rol !== "destinatario") {
+    return { found: false, error: "Rol inválido." };
+  }
+
+  const take = Math.min(Math.max(Number(limitScan) || 2000, 100), 2000);
+  const snap = await getDocs(query(enviosCol(), orderBy("fechaRegistro", "desc"), limit(take)));
+
+  for (const d of snap.docs) {
+    const data = d.data();
+    const party = rol === "destinatario" ? data.destinatario : data.remitente;
+    if (!party) continue;
+    const partyDoc = normalizeDocumentoBusqueda(party.documento);
+    if (partyDoc !== docNorm) continue;
+
+    return {
+      found: true,
+      parte: {
+        nombres: String(party.nombres || "").trim(),
+        documento: String(party.documento || "").trim(),
+        telefono: String(party.telefono || "").trim(),
+        direccion: String(party.direccion || "").trim(),
+        rol,
+        ultimoCodigoEnvio: data.codigoEnvio || d.id,
+        ultimaFechaRegistro: data.fechaRegistro || ""
+      }
+    };
+  }
+
+  return { found: false };
+}
+
 async function findEnvioByCodigo(codigoEnvio) {
   const ref = doc(getDb(), "envios", codigoEnvio);
   const snap = await getDoc(ref);
@@ -165,9 +221,11 @@ async function getCounter(counterId) {
 }
 
 module.exports = {
+  ESTADOS_ACTIVOS,
   listEnviosActivos,
   listEnviosHistorial,
   subscribeEnviosActivos,
+  buscarParteEnEnviosPorDocumento,
   findEnvioByCodigo,
   getHistorialByCodigo,
   createEnvioDoc,

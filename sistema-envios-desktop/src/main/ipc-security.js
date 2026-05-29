@@ -37,6 +37,13 @@ function validatePayload(channel, payload) {
   if (channel === "clientes:obtenerPorDocumento" && p.documento !== undefined) {
     p.documento = requiredString(p.documento, "documento").slice(0, 20);
   }
+  if (channel === "envios:buscarPartePorDocumento") {
+    p.documento = requiredString(p.documento, "documento").slice(0, 20);
+    const rol = String(p.rol || "remitente").toLowerCase();
+    p.rol = rol === "destinatario" ? "destinatario" : "remitente";
+    const lim = Number(p.limitScan);
+    p.limitScan = Number.isFinite(lim) ? Math.min(Math.max(lim, 100), 2000) : 2000;
+  }
   if (channel === "auth:login") {
     const { validateEmail } = require("../utils/validaciones");
     p.email = validateEmail(p.email, "email");
@@ -59,7 +66,7 @@ function validatePayload(channel, payload) {
     p.limitCount = Number.isFinite(lim) ? Math.min(Math.max(lim, 1), 500) : 500;
   }
   if (channel === "geo:registrarUbicacion") {
-    if (p.codigoEnvio !== undefined) p.codigoEnvio = validateCodigoEnvio(p.codigoEnvio);
+    p.codigoEnvio = validateCodigoEnvio(p.codigoEnvio);
     p.direccion = requiredString(p.direccion, "direccion").slice(0, 500);
     const lat = Number(String(p.latitud ?? "").replace(",", "."));
     const lng = Number(String(p.longitud ?? "").replace(",", "."));

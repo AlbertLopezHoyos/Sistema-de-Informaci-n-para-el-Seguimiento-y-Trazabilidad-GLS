@@ -6,6 +6,8 @@
 
   const LIMIT_LISTA_DEFAULT = 40;
   const LIMIT_LISTA_TODOS = 2000;
+  /** Mismo criterio que ipc-security.validateCodigoEnvio */
+  const CODIGO_ENVIO_RE = /^ENV-\d{4}-\d{4,}$/i;
 
   const ESTADOS_FILTRO = [
     "Todos",
@@ -65,17 +67,19 @@
               <option value="estado">Estado</option>
             </select>
           </div>
-          <div class="field envio-busqueda-field-valor envio-busqueda-valor--codigo" id="${p}WrapCodigo">
-            <label for="${p}InputCodigo">Código</label>
-            <input id="${p}InputCodigo" class="gls-control envio-busqueda-input-codigo" type="text" placeholder="ENV-2026-0001" value="${codigoVal}" autocomplete="off" />
-          </div>
-          <div class="field envio-busqueda-field-valor envio-busqueda-valor--cliente" id="${p}WrapCliente" hidden>
-            <label for="${p}InputCliente">Cliente</label>
-            <input id="${p}InputCliente" class="gls-control" type="text" placeholder="Nombre, RUC o DNI" autocomplete="off" />
-          </div>
-          <div class="field envio-busqueda-field-valor envio-busqueda-valor--estado" id="${p}WrapEstado" hidden>
-            <label for="${p}SelectEstado">Estado</label>
-            <select id="${p}SelectEstado" class="gls-control">${estadoOptionsHtml()}</select>
+          <div class="envio-busqueda-valor-slot">
+            <div class="field envio-busqueda-field-valor envio-busqueda-valor--codigo" id="${p}WrapCodigo">
+              <label for="${p}InputCodigo">Código</label>
+              <input id="${p}InputCodigo" class="gls-control envio-busqueda-input-codigo" type="text" placeholder="ENV-2026-0001" value="${codigoVal}" autocomplete="off" spellcheck="false" />
+            </div>
+            <div class="field envio-busqueda-field-valor envio-busqueda-valor--cliente" id="${p}WrapCliente" hidden>
+              <label for="${p}InputCliente">Cliente</label>
+              <input id="${p}InputCliente" class="gls-control envio-busqueda-input-cliente" type="text" placeholder="Nombre, RUC o DNI" autocomplete="off" spellcheck="false" />
+            </div>
+            <div class="field envio-busqueda-field-valor envio-busqueda-valor--estado" id="${p}WrapEstado" hidden>
+              <label for="${p}SelectEstado">Estado</label>
+              <select id="${p}SelectEstado" class="gls-control">${estadoOptionsHtml()}</select>
+            </div>
           </div>
           <div class="envio-busqueda-actions">
             <button type="button" class="btn btn-primary envio-busqueda-btn-buscar" id="${p}BtnBuscar">Buscar</button>
@@ -113,15 +117,30 @@
     const qrFile = panel.querySelector(`#${p}QrFile`);
     const statusEl = panel.querySelector(`#${p}Status`);
 
-    function syncCampos() {
-      const modo = modoEl?.value || "codigo";
-      wrapCodigo.hidden = modo !== "codigo";
-      wrapCliente.hidden = modo !== "cliente";
-      wrapEstado.hidden = modo !== "estado";
+    function ensureCamposEditables() {
+      [inputCodigo, inputCliente, selectEstado].forEach((el) => {
+        if (!el) return;
+        el.disabled = false;
+        el.readOnly = false;
+        el.removeAttribute("aria-disabled");
+      });
     }
 
-    modoEl?.addEventListener("change", syncCampos);
-    syncCampos();
+    function syncCampos(focusActivo = false) {
+      const modo = modoEl?.value || "codigo";
+      if (wrapCodigo) wrapCodigo.hidden = modo !== "codigo";
+      if (wrapCliente) wrapCliente.hidden = modo !== "cliente";
+      if (wrapEstado) wrapEstado.hidden = modo !== "estado";
+      ensureCamposEditables();
+      if (focusActivo) {
+        const activo =
+          modo === "cliente" ? inputCliente : modo === "estado" ? selectEstado : inputCodigo;
+        activo?.focus?.();
+      }
+    }
+
+    modoEl?.addEventListener("change", () => syncCampos(true));
+    syncCampos(false);
 
     function getCriterios() {
       const modo = modoEl?.value || "codigo";
@@ -216,7 +235,7 @@
     if (modo === "codigo") {
       const codigo = (criterios.codigo || "").trim();
       if (!codigo) throw new Error("Ingrese el código de envío.");
-      if (/^ENV-\d{4}-\d{4}$/i.test(codigo)) {
+      if (CODIGO_ENVIO_RE.test(codigo)) {
         return { tipo: "codigo", codigo: codigo.toUpperCase() };
       }
     }
@@ -442,8 +461,28 @@
     return refreshRegistrosRapidos(container, { resetLista: true });
   }
 
+  /** Muestra u oculta el bloque «Otros registros» (consulta / geo / seguimiento). */
+  function setSeccionOtrosRegistrosVisible(otrosRegistrosEl, visible) {
+    if (otrosRegistrosEl) otrosRegistrosEl.hidden = !visible;
+  }
+
+  /** Tras Limpiar: ocultar sección y vaciar lista (comportamiento unificado). */
+  function limpiarSeccionOtrosRegistros(quickListEl, otrosRegistrosEl) {
+    setSeccionOtrosRegistrosVisible(otrosRegistrosEl, false);
+    if (quickListEl) {
+      quickListEl.innerHTML = "";
+      quickListEl.__glsQuickEnvios = [];
+    }
+  }
+
+  function moduloDisponible() {
+    return Boolean(window.glsApi?.envios?.listarHistorial);
+  }
+
   window.GlsEnvioBusquedaRapida = {
     ESTADOS_FILTRO,
+    CODIGO_ENVIO_RE,
+    moduloDisponible,
     ICON_PDF_QR,
     renderBusquedaPanelHtml,
     wireBusquedaPanel,
@@ -454,6 +493,8 @@
     mountRegistrosRapidos,
     refreshRegistrosRapidos,
     cargarTodosLosRegistros,
+    setSeccionOtrosRegistrosVisible,
+    limpiarSeccionOtrosRegistros,
     filtrarLista,
     LIMIT_LISTA_DEFAULT,
     LIMIT_LISTA_TODOS

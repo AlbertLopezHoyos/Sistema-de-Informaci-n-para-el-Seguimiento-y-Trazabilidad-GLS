@@ -12,7 +12,17 @@ npm test
 
 Archivos principales: `auth`, `clientes`, `registro-envio`, `trazabilidad`, `geolocalizacionQr`, `qrDeepLink`, `uploadValidation`, `backup`, `exportTabular`, `auditoria`, `consulta` (según existan en `tests/`).
 
-Cobertura esperada: **32+ tests** en verde tras `npm test`.
+Cobertura esperada: **47 tests** en verde tras `npm test` (18 suites).
+
+### M-06b — Limpiar búsqueda (Consulta / Geo / Seguimiento)
+
+| Campo | Detalle |
+| --- | --- |
+| **Objetivo** | Comportamiento unificado del botón **Limpiar**. |
+| **Pasos** | 1. En cada pantalla con «Buscar envío», realizar una búsqueda que muestre resultado y «Otros registros». 2. Pulsar **Limpiar**. |
+| **Resultado esperado** | Criterios vacíos; sin detalle/resultado; sección **Otros registros** oculta y lista vacía. 3. Nueva búsqueda → «Otros registros» visible de nuevo si hay coincidencias. |
+| **Resultado obtenido** | |
+| **Estado** | |
 
 ---
 

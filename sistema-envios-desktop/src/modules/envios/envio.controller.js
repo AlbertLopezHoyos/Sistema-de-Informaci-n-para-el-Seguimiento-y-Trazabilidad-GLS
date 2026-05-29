@@ -5,7 +5,8 @@ const envioController = {
   crearEnvio: (payload) => envioService.crearEnvio(payload),
   obtenerPorCodigo: (codigoEnvio) => envioService.obtenerPorCodigo(codigoEnvio),
   listarActivos: (opts) => envioService.listarActivos(opts),
-  listarHistorial: (opts) => envioService.listarHistorial(opts)
+  listarHistorial: (opts) => envioService.listarHistorial(opts),
+  buscarPartePorDocumento: (payload) => envioService.buscarPartePorDocumento(payload)
 };
 
 module.exports = { envioController };

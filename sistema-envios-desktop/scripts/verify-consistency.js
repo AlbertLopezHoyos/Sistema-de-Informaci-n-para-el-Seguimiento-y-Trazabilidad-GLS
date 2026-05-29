@@ -18,7 +18,7 @@ function ok(msg) {
 }
 
 const NAMED_CONTROLLERS = [
-  { file: "src/modules/envios/envio.controller.js", exportName: "envioController", methods: ["previewCotizacion", "crearEnvio", "obtenerPorCodigo", "listarActivos", "listarHistorial"] },
+  { file: "src/modules/envios/envio.controller.js", exportName: "envioController", methods: ["previewCotizacion", "crearEnvio", "obtenerPorCodigo", "buscarPartePorDocumento", "listarActivos", "listarHistorial"] },
   { file: "src/modules/trazabilidad/trazabilidad.controller.js", exportName: "trazabilidadController", methods: ["buscar", "listarEstados", "actualizarEstado"] },
   { file: "src/modules/geolocalizacion-qr/geolocalizacionQr.controller.js", exportName: "geolocalizacionQrController", methods: ["buscar", "registrarUbicacion", "generarQr"] },
   { file: "src/modules/auth/auth.controller.js", exportName: "authController", methods: ["register", "login", "countUsers", "listUsersAdmin", "inviteUser", "setUsuarioActivo"] },

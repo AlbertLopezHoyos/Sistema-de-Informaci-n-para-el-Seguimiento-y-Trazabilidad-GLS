@@ -44,6 +44,7 @@ contextBridge.exposeInMainWorld("glsApi", {
      previewCotizacion: (data) => invoke("envios:previewCotizacion", data),
      crear: (data) => invoke("envios:crear", data),
      obtenerPorCodigo: (codigoEnvio) => invoke("envios:obtenerPorCodigo", { codigoEnvio }),
+     buscarPartePorDocumento: (payload) => invoke("envios:buscarPartePorDocumento", payload || {}),
      listarActivos: (limitCount = 200) => invoke("envios:listarActivos", { limitCount }),
      listarHistorial: ({ estado = "Todos", limitCount = 800 } = {}) =>
        invoke("envios:listarHistorial", { estado, limitCount }),

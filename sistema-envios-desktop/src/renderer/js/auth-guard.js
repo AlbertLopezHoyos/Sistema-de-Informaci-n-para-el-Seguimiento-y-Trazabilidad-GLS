@@ -29,7 +29,12 @@
           return;
         }
         if (me?.user) await window.glsApi.auth.touchSession();
-      } catch (_) {}
+      } catch (err) {
+        const msg = String(err?.message || err || "");
+        if (/AUTH_REQUIRED|SESSION_EXPIRED|sesión|session/i.test(msg)) {
+          window.location.href = "./login.html?expired=1";
+        }
+      }
     };
     setInterval(tick, CHECK_MS);
     document.addEventListener("visibilitychange", () => {

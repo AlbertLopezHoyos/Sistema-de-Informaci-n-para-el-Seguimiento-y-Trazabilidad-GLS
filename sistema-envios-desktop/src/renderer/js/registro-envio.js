@@ -104,8 +104,12 @@
   }
 
   const MSG_PERMISO_REGISTRO = "No tiene permisos para registrar envíos.";
-  const MSG_BUSCAR_CLIENTE_OK = "Cliente encontrado y cargado correctamente.";
-  const MSG_BUSCAR_CLIENTE_NO = "No se encontró un cliente con ese documento. Puede registrar los datos manualmente.";
+  const MSG_BUSCAR_REMITENTE_OK = "Remitente cargado desde un envío anterior.";
+  const MSG_BUSCAR_REMITENTE_NO =
+    "No hay envíos previos con ese documento como remitente. Complete los datos manualmente.";
+  const MSG_BUSCAR_DESTINATARIO_OK = "Destinatario cargado desde un envío anterior.";
+  const MSG_BUSCAR_DESTINATARIO_NO =
+    "No hay envíos previos con ese documento como destinatario. Complete los datos manualmente.";
   const MSG_TABS_BLOQUEADOS =
     "Complete remitente y destinatario en el tab Cliente para continuar.";
 
@@ -171,17 +175,7 @@
                   <a class="btn btn-icon" href="./clientes.html">Gestionar clientes</a>
                 </div>
               </div>
-              <div class="hint">Si eliges un cliente del catálogo, se completarán los datos del remitente cuando sea posible y el envío quedará enlazado al catálogo.</div>
-              <div class="form-row grid grid-2 registro-buscar-cliente" style="align-items:end; margin-top:14px">
-                <div class="field">
-                  <label>Buscar cliente por documento (DNI / RUC)</label>
-                  <input type="text" id="inpBuscarDocCliente" placeholder="Ej. 20100070991" maxlength="20" autocomplete="off" />
-                </div>
-                <div class="actions" style="align-self:end">
-                  <button type="button" class="btn btn-accent" id="btnBuscarClienteDoc">Buscar cliente</button>
-                </div>
-              </div>
-              <p class="hint" id="hintBuscarCliente" style="margin-top:6px"></p>
+              <div class="hint">El catálogo de empresas es opcional. Para autocompletar personas use la búsqueda por DNI en remitente o destinatario (solo si ya participaron en un envío anterior).</div>
             </section>
 
             <div class="grid grid-2" style="margin-top:12px">
@@ -190,6 +184,16 @@
                   <h3 class="title">Datos del remitente</h3>
                   <span class="section-chip"><span class="ico">${ICONS.user}</span> Remitente</span>
                 </div>
+                <div class="form-row grid grid-2 registro-buscar-parte" style="align-items:end; margin-bottom:10px">
+                  <div class="field">
+                    <label>Buscar remitente por DNI / RUC (envíos anteriores)</label>
+                    <input type="text" id="inpBuscarDocRemitente" placeholder="Ej. 45678912" maxlength="20" autocomplete="off" />
+                  </div>
+                  <div class="actions" style="align-self:end">
+                    <button type="button" class="btn btn-accent btn--sm" id="btnBuscarRemitenteEnvio">Buscar y cargar</button>
+                  </div>
+                </div>
+                <p class="hint" id="hintBuscarRemitente" style="margin-top:-4px;margin-bottom:8px"></p>
                 <div class="form-row grid grid-2">
                   <div class="field"><label>Nombres completos</label><input name="r_nombres" placeholder="Juan Pérez" required /></div>
                   <div class="field"><label>Documento</label><input name="r_documento" placeholder="45678912" required /></div>
@@ -205,6 +209,16 @@
                   <h3 class="title">Datos del destinatario</h3>
                   <span class="section-chip"><span class="ico">${ICONS.user}</span> Destinatario</span>
                 </div>
+                <div class="form-row grid grid-2 registro-buscar-parte" style="align-items:end; margin-bottom:10px">
+                  <div class="field">
+                    <label>Buscar destinatario por DNI / RUC (envíos anteriores)</label>
+                    <input type="text" id="inpBuscarDocDestinatario" placeholder="Ej. 76543210" maxlength="20" autocomplete="off" />
+                  </div>
+                  <div class="actions" style="align-self:end">
+                    <button type="button" class="btn btn-accent btn--sm" id="btnBuscarDestinatarioEnvio">Buscar y cargar</button>
+                  </div>
+                </div>
+                <p class="hint" id="hintBuscarDestinatario" style="margin-top:-4px;margin-bottom:8px"></p>
                 <div class="form-row grid grid-2">
                   <div class="field"><label>Nombres completos</label><input name="d_nombres" placeholder="María López" required /></div>
                   <div class="field"><label>Documento</label><input name="d_documento" placeholder="76543210" required /></div>
@@ -338,9 +352,12 @@
   const btnTabSiguiente = document.getElementById("btnTabSiguiente");
   const bannerPermiso = document.getElementById("bannerPermisoRegistro");
   const btnLimpiarFormulario = document.getElementById("btnLimpiarFormulario");
-  const inpBuscarDocCliente = document.getElementById("inpBuscarDocCliente");
-  const btnBuscarClienteDoc = document.getElementById("btnBuscarClienteDoc");
-  const hintBuscarCliente = document.getElementById("hintBuscarCliente");
+  const inpBuscarDocRemitente = document.getElementById("inpBuscarDocRemitente");
+  const inpBuscarDocDestinatario = document.getElementById("inpBuscarDocDestinatario");
+  const btnBuscarRemitenteEnvio = document.getElementById("btnBuscarRemitenteEnvio");
+  const btnBuscarDestinatarioEnvio = document.getElementById("btnBuscarDestinatarioEnvio");
+  const hintBuscarRemitente = document.getElementById("hintBuscarRemitente");
+  const hintBuscarDestinatario = document.getElementById("hintBuscarDestinatario");
   const cotPreviewEl = document.getElementById("cot_preview");
   const selClienteCatalogo = document.getElementById("selClienteCatalogo");
   /** @type {Map<string, { nombres?: string, documento?: string, telefono?: string, direccion?: string }>} */
@@ -507,21 +524,26 @@
     refreshNavTabFormulario();
   }
 
+  function aplicarParteEnFormulario(prefijo, parte) {
+    if (!parte) return;
+    const setVal = (name, val) => {
+      const el = form.querySelector(`[name="${name}"]`);
+      if (el && val != null && String(val).trim() !== "") el.value = String(val).trim();
+    };
+    setVal(`${prefijo}nombres`, parte.nombres);
+    setVal(`${prefijo}documento`, parte.documento);
+    setVal(`${prefijo}telefono`, parte.telefono);
+    setVal(`${prefijo}direccion`, parte.direccion);
+    window.GlsAlert.clearAlert(alertEl);
+    updateClienteTabGate();
+  }
+
   function aplicarRemitenteDesdeObjetoCliente(c) {
     if (!c) {
       updateClienteTabGate();
       return;
     }
-    const setVal = (name, val) => {
-      const el = form.querySelector(`[name="${name}"]`);
-      if (el && val != null && String(val).trim() !== "") el.value = String(val).trim();
-    };
-    setVal("r_nombres", c.nombres);
-    setVal("r_documento", c.documento);
-    setVal("r_telefono", c.telefono);
-    setVal("r_direccion", c.direccion);
-    window.GlsAlert.clearAlert(alertEl);
-    updateClienteTabGate();
+    aplicarParteEnFormulario("r_", c);
   }
 
   function aplicarRemitenteDesdeCliente(docKey) {
@@ -529,6 +551,59 @@
     if (!k) return;
     const c = catalogoClientesPorDocumento.get(k);
     aplicarRemitenteDesdeObjetoCliente(c);
+  }
+
+  async function buscarParteEnEnviosHistoricos(rol) {
+    const esDest = rol === "destinatario";
+    const inp = esDest ? inpBuscarDocDestinatario : inpBuscarDocRemitente;
+    const hint = esDest ? hintBuscarDestinatario : hintBuscarRemitente;
+    const btn = esDest ? btnBuscarDestinatarioEnvio : btnBuscarRemitenteEnvio;
+    const prefijo = esDest ? "d_" : "r_";
+    const msgOk = esDest ? MSG_BUSCAR_DESTINATARIO_OK : MSG_BUSCAR_REMITENTE_OK;
+    const msgNo = esDest ? MSG_BUSCAR_DESTINATARIO_NO : MSG_BUSCAR_REMITENTE_NO;
+
+    window.GlsAlert.clearAlert(alertEl);
+    const doc = String(inp?.value || "").trim();
+    if (!doc) {
+      window.GlsAlert.showAlert(alertEl, {
+        type: "error",
+        message: `Ingrese el documento del ${esDest ? "destinatario" : "remitente"} para buscar.`
+      });
+      return;
+    }
+    if (hint) hint.textContent = "Buscando en envíos anteriores…";
+    if (btn) btn.disabled = true;
+    try {
+      const r = await window.glsApi.envios.buscarPartePorDocumento({ documento: doc, rol });
+      if (r?.ok && r.parte) {
+        aplicarParteEnFormulario(prefijo, r.parte);
+        if (inp && r.parte.documento) inp.value = r.parte.documento;
+        if (!esDest && selClienteCatalogo && r.parte.documento) {
+          const v = String(r.parte.documento).trim();
+          if ([...selClienteCatalogo.options].some((o) => o.value === v)) {
+            selClienteCatalogo.value = v;
+          }
+        }
+        if (hint) {
+          const ref = r.parte.ultimoCodigoEnvio
+            ? `Último envío: ${r.parte.ultimoCodigoEnvio}`
+            : "";
+          hint.textContent = ref;
+        }
+        window.GlsAlert.showAlert(alertEl, { type: "success", message: msgOk });
+      } else {
+        if (hint) hint.textContent = "";
+        window.GlsAlert.showAlert(alertEl, { type: "info", message: r?.error || msgNo });
+      }
+    } catch (err) {
+      if (hint) hint.textContent = "";
+      window.GlsAlert.showAlert(alertEl, {
+        type: "error",
+        message: humanizarErrorFirestore(err?.message || String(err))
+      });
+    } finally {
+      if (btn) btn.disabled = registroSubmitEnCurso;
+    }
   }
 
   async function cargarCatalogoClientes() {
@@ -577,7 +652,8 @@
   function setBusy(busy, text) {
     registroSubmitEnCurso = busy;
     btnLimpiarFormulario.disabled = busy;
-    btnBuscarClienteDoc.disabled = busy;
+    if (btnBuscarRemitenteEnvio) btnBuscarRemitenteEnvio.disabled = busy;
+    if (btnBuscarDestinatarioEnvio) btnBuscarDestinatarioEnvio.disabled = busy;
     if (btnTabAnterior) btnTabAnterior.disabled = busy || tabIndice(tabActiva) <= 0;
     if (btnTabSiguiente) btnTabSiguiente.disabled = busy || !(tabActiva === "cliente" || tabActiva === "envio");
     statusEl.textContent = text || "";
@@ -615,7 +691,8 @@
       if (String(fd.get(k) || "").trim()) return true;
     }
     if (String(fd.get("cliente_documento_catalogo") || "").trim()) return true;
-    if (String(inpBuscarDocCliente?.value || "").trim()) return true;
+    if (String(inpBuscarDocRemitente?.value || "").trim()) return true;
+    if (String(inpBuscarDocDestinatario?.value || "").trim()) return true;
     return false;
   }
 
@@ -623,8 +700,10 @@
   async function limpiarFormularioCompleto() {
     form.reset();
     if (selClienteCatalogo) selClienteCatalogo.value = "";
-    if (inpBuscarDocCliente) inpBuscarDocCliente.value = "";
-    if (hintBuscarCliente) hintBuscarCliente.textContent = "";
+    if (inpBuscarDocRemitente) inpBuscarDocRemitente.value = "";
+    if (inpBuscarDocDestinatario) inpBuscarDocDestinatario.value = "";
+    if (hintBuscarRemitente) hintBuscarRemitente.textContent = "";
+    if (hintBuscarDestinatario) hintBuscarDestinatario.textContent = "";
     lastPreviewCotizacion = null;
     cotPreviewEl.className = "muted";
     cotPreviewEl.textContent =
@@ -858,6 +937,7 @@
    * Persistencia del envío (tras confirmación). Mantiene el flujo previo: crear → obtener → modal éxito.
    */
   async function ejecutarRegistroEnvio() {
+    if (registroSubmitEnCurso) return;
     const fd = new FormData(form);
     try {
       setBusy(true, "Guardando en Firestore...");
@@ -940,8 +1020,10 @@
 
       form.reset();
       if (selClienteCatalogo) selClienteCatalogo.value = "";
-      if (inpBuscarDocCliente) inpBuscarDocCliente.value = "";
-      if (hintBuscarCliente) hintBuscarCliente.textContent = "";
+      if (inpBuscarDocRemitente) inpBuscarDocRemitente.value = "";
+      if (inpBuscarDocDestinatario) inpBuscarDocDestinatario.value = "";
+      if (hintBuscarRemitente) hintBuscarRemitente.textContent = "";
+      if (hintBuscarDestinatario) hintBuscarDestinatario.textContent = "";
       lastPreviewCotizacion = null;
       await applyDefaultsFromConfig();
       scheduleQuotePreview();
@@ -966,35 +1048,19 @@
     await limpiarFormularioCompleto();
   });
 
-  /** Búsqueda rápida de cliente por documento en Firestore (IPC). */
-  btnBuscarClienteDoc.addEventListener("click", async () => {
-    window.GlsAlert.clearAlert(alertEl);
-    const doc = String(inpBuscarDocCliente?.value || "").trim();
-    if (!doc) {
-      window.GlsAlert.showAlert(alertEl, { type: "error", message: "Ingrese un documento para buscar." });
-      return;
+  btnBuscarRemitenteEnvio?.addEventListener("click", () => void buscarParteEnEnviosHistoricos("remitente"));
+  btnBuscarDestinatarioEnvio?.addEventListener("click", () => void buscarParteEnEnviosHistoricos("destinatario"));
+
+  inpBuscarDocRemitente?.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      void buscarParteEnEnviosHistoricos("remitente");
     }
-    if (hintBuscarCliente) hintBuscarCliente.textContent = "Buscando…";
-    try {
-      const r = await window.glsApi.clientes.obtenerPorDocumento(doc);
-      if (r?.ok && r.cliente) {
-        aplicarRemitenteDesdeObjetoCliente(r.cliente);
-        const v = String(r.cliente.documento || "").trim();
-        if (selClienteCatalogo && [...selClienteCatalogo.options].some((o) => o.value === v)) {
-          selClienteCatalogo.value = v;
-        }
-        if (hintBuscarCliente) hintBuscarCliente.textContent = "";
-        window.GlsAlert.showAlert(alertEl, { type: "success", message: MSG_BUSCAR_CLIENTE_OK });
-      } else {
-        if (hintBuscarCliente) hintBuscarCliente.textContent = "";
-        window.GlsAlert.showAlert(alertEl, { type: "info", message: MSG_BUSCAR_CLIENTE_NO });
-      }
-    } catch (err) {
-      if (hintBuscarCliente) hintBuscarCliente.textContent = "";
-      window.GlsAlert.showAlert(alertEl, {
-        type: "error",
-        message: humanizarErrorFirestore(err?.message || String(err))
-      });
+  });
+  inpBuscarDocDestinatario?.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      void buscarParteEnEnviosHistoricos("destinatario");
     }
   });
 
@@ -1024,6 +1090,7 @@
   });
 
   async function solicitarRegistroEnvio() {
+    if (registroSubmitEnCurso) return;
     window.GlsAlert.clearAlert(alertEl);
 
     if (!tabPermiteRegistrarEnvio(tabActiva)) {

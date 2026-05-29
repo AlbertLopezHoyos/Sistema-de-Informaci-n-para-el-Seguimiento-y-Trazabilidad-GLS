@@ -45,7 +45,7 @@
 
           <div id="result" class="envio-consulta-result card gls-compact-panel u-mt-md" style="display:none" hidden></div>
 
-          <section class="envio-otros-registros u-mt-md" aria-label="Otros registros">
+          <section id="consultaOtrosRegistros" class="envio-otros-registros u-mt-md" aria-label="Otros registros">
             <div class="envio-otros-registros-title">Otros registros</div>
             <div id="consultaQuickList" class="envio-quick-list-wrap u-mt-sm"></div>
           </section>
@@ -57,14 +57,17 @@
   const alertEl = document.getElementById("alert");
   const resultEl = document.getElementById("result");
   const quickListEl = document.getElementById("consultaQuickList");
+  const otrosRegistrosEl = document.getElementById("consultaOtrosRegistros");
+  const BX = () => window.GlsEnvioBusquedaRapida;
   const busquedaUi = window.GlsEnvioBusquedaRapida?.wireBusquedaPanel?.(
     document.getElementById("consultaBusquedaMount"),
     { idPrefix: "consulta" }
   );
 
   function refreshOtrosRegistros(excludeCodigo, patch = {}) {
+    BX()?.setSeccionOtrosRegistrosVisible?.(otrosRegistrosEl, true);
     const criterios = busquedaUi?.getCriterios?.() || {};
-    void window.GlsEnvioBusquedaRapida?.refreshRegistrosRapidos?.(quickListEl, {
+    void BX()?.refreshRegistrosRapidos?.(quickListEl, {
       excludeCodigo: excludeCodigo || "",
       criterios,
       ...patch
@@ -88,7 +91,7 @@
     if (resultEl) resultEl.innerHTML = "";
     marcarBusquedaActiva(false);
     busquedaUi?.setBusy?.(false, "");
-    await window.GlsEnvioBusquedaRapida?.cargarTodosLosRegistros?.(quickListEl);
+    BX()?.limpiarSeccionOtrosRegistros?.(quickListEl, otrosRegistrosEl);
   }
 
   function buildConsultaDetalleModalHtml(e, historial) {
@@ -283,6 +286,13 @@
   async function buscar() {
     window.GlsAlert.clearAlert(alertEl);
     const BX = window.GlsEnvioBusquedaRapida;
+    if (!BX?.resolverBusqueda) {
+      window.GlsAlert.showAlert(alertEl, {
+        type: "error",
+        message: "Módulo de búsqueda no disponible. Recargue la página (F5)."
+      });
+      return;
+    }
     const criterios = busquedaUi?.getCriterios?.() || {};
     busquedaUi?.setBusy?.(true, "Buscando…");
     try {
@@ -312,7 +322,9 @@
     const QD = window.GlsQrDecode;
     busquedaUi?.setBusy?.(true, QD?.isPdfFile?.(file) ? "Leyendo PDF…" : "Leyendo imagen…");
     try {
-      const { codigo, tipo } = await window.GlsEnvioBusquedaRapida.leerCodigoDesdeArchivo(file);
+      const leido = await window.GlsEnvioBusquedaRapida?.leerCodigoDesdeArchivo?.(file);
+      const codigo = leido?.codigo;
+      const tipo = leido?.tipo;
       if (!codigo) throw new Error("No se detectó un código ENV en el archivo.");
       await buscarPorCodigo(codigo, { tipo, nombre: file.name });
     } catch (e) {
@@ -324,11 +336,11 @@
     }
   }
 
-  busquedaUi?.btnQr?.addEventListener("click", () => busquedaUi.qrFile?.click());
+  busquedaUi?.btnQr?.addEventListener("click", () => busquedaUi?.qrFile?.click());
   busquedaUi?.qrFile?.addEventListener("change", () => {
-    const f = busquedaUi.qrFile.files?.[0];
+    const f = busquedaUi?.qrFile?.files?.[0];
     if (f) void leerArchivoYBuscar(f);
-    busquedaUi.qrFile.value = "";
+    if (busquedaUi?.qrFile) busquedaUi.qrFile.value = "";
   });
 
   busquedaUi?.btnBuscar?.addEventListener("click", () => void buscar());

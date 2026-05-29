@@ -305,6 +305,7 @@ function registerIpcHandlers() {
     const gate = requireAdmin();
     if (gate) return gate;
     try {
+      requireAuth();
       const user = await authController.inviteUser(payload);
       return { ok: true, user };
     } catch (err) {
@@ -316,6 +317,7 @@ function registerIpcHandlers() {
     const gate = requireAdmin();
     if (gate) return gate;
     try {
+      requireAuth();
       const user = await authController.setUsuarioActivo(payload || {});
       return { ok: true, user };
     } catch (err) {
@@ -391,6 +393,17 @@ function registerIpcHandlers() {
       requireAuth();
       const body = validatePayload("envios:obtenerPorCodigo", payload || {});
       return await envioController.obtenerPorCodigo(body.codigoEnvio);
+    } catch (err) {
+      return ipcError(err, "ipc");
+    }
+  });
+
+  /** Remitente/destinatario desde envíos históricos (registro de envío). */
+  ipcMain.handle("envios:buscarPartePorDocumento", async (_evt, payload) => {
+    try {
+      requireAuth();
+      const body = validatePayload("envios:buscarPartePorDocumento", payload || {});
+      return await envioController.buscarPartePorDocumento(body);
     } catch (err) {
       return ipcError(err, "ipc");
     }
@@ -511,8 +524,9 @@ function registerIpcHandlers() {
     try {
       requireAuth();
       assertPuedeMutarOperaciones();
+      const validated = validatePayload("geo:registrarUbicacion", payload || {});
       const body = {
-        ...(payload || {}),
+        ...validated,
         responsable: currentUser?.nombres || currentUser?.email || "Área de operaciones",
         registradoPor: currentUser?.email || currentUser?.nombres || ""
       };
